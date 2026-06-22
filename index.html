@@ -1,0 +1,1592 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Inventory</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:wght@400;500;600&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
+<style>
+  :root{
+    --bg: #0E0E10;
+    --bg-raised: #161618;
+    --bg-raised-2: #1C1C1F;
+    --line: #2A2A2E;
+    --line-soft: #232326;
+    --ink: #E8E6E0;
+    --ink-dim: #9C9A95;
+    --ink-faint: #5F5D5A;
+    --white: #F7F9FC;
+    --ice: #6FA8DC;
+    --ice-dim: #3D5A75;
+    --warn: #D9A84E;
+    --good: #6FAE8C;
+    --serif: 'Source Serif 4', Georgia, 'Times New Roman', serif;
+    --grotesk: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    --mono: 'JetBrains Mono', 'SF Mono', Consolas, monospace;
+  }
+
+  *{ box-sizing: border-box; margin:0; padding:0; }
+  html, body { background: var(--bg); }
+  body{
+    font-family: var(--grotesk);
+    color: var(--ink);
+    font-size: 14px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    min-height: 100vh;
+  }
+
+  a { color: inherit; }
+
+  /* subtle facet-light ambient backdrop */
+  body::before{
+    content:"";
+    position: fixed;
+    inset: 0;
+    background:
+      radial-gradient(ellipse 900px 500px at 15% -10%, rgba(111,168,220,0.07), transparent 60%),
+      radial-gradient(ellipse 700px 600px at 110% 10%, rgba(247,249,252,0.04), transparent 60%);
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .app{ position: relative; z-index: 1; max-width: 1400px; margin: 0 auto; padding: 0 28px 80px; }
+
+  /* ---------- HEADER ---------- */
+  header.top{
+    display:flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    padding: 40px 0 28px;
+    border-bottom: 1px solid var(--line);
+    margin-bottom: 32px;
+    gap: 24px;
+    flex-wrap: wrap;
+  }
+  .brand{ display:flex; align-items:center; gap: 14px; }
+  .brand svg{ width: 34px; height: 34px; flex-shrink:0; }
+  .brand-text .eyebrow{
+    font-family: var(--mono);
+    font-size: 10.5px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--ice);
+    margin-bottom: 4px;
+  }
+  .brand-text h1{
+    font-family: var(--serif);
+    font-weight: 500;
+    font-size: 26px;
+    letter-spacing: 0.01em;
+    color: var(--white);
+  }
+  .top-meta{
+    text-align: right;
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--ink-faint);
+    line-height: 1.7;
+  }
+  .top-meta b{ color: var(--ink-dim); font-weight: 500;}
+  .upload-row{ display:flex; gap: 8px; justify-content: flex-end; margin-top: 10px; }
+  .btn-upload, .btn-reset-data{
+    font-family: var(--mono);
+    font-size: 10.5px;
+    letter-spacing: 0.04em;
+    padding: 7px 12px;
+    border-radius: 3px;
+    cursor: pointer;
+    border: 1px solid var(--ice-dim);
+    background: transparent;
+    color: var(--ice);
+    transition: background .12s, color .12s;
+  }
+  .btn-upload:hover{ background: rgba(111,168,220,0.12); }
+  .btn-reset-data{
+    border-color: var(--line);
+    color: var(--ink-faint);
+  }
+  .btn-reset-data:hover{ color: var(--ink-dim); border-color: var(--ink-faint); }
+  .btn-reset-data.hidden{ display:none; }
+  .upload-status{
+    margin-top: 6px;
+    font-family: var(--mono);
+    font-size: 10.5px;
+    min-height: 14px;
+    text-align: right;
+  }
+  .upload-status.ok{ color: var(--good); }
+  .upload-status.err{ color: #D9748A; }
+  .upload-status.busy{ color: var(--ice); }
+
+  /* ---------- MODALS ---------- */
+  .modal-overlay{
+    position: fixed;
+    inset: 0;
+    background: rgba(8,8,10,0.78);
+    backdrop-filter: blur(2px);
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    z-index: 1000;
+    padding: 20px;
+  }
+  .modal-overlay.hidden{ display:none; }
+  .modal-box{
+    background: var(--bg-raised);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 28px;
+    max-width: 380px;
+    width: 100%;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+  }
+  .modal-box-wide{ max-width: 720px; }
+  .modal-title{
+    font-family: var(--serif);
+    font-size: 19px;
+    color: var(--white);
+    margin-bottom: 8px;
+  }
+  .modal-sub{
+    font-size: 12.5px;
+    color: var(--ink-dim);
+    line-height: 1.5;
+    margin-bottom: 18px;
+  }
+  .modal-input{
+    width: 100%;
+    background: var(--bg);
+    border: 1px solid var(--line);
+    color: var(--ink);
+    padding: 11px 12px;
+    border-radius: 4px;
+    font-size: 14px;
+    font-family: var(--grotesk);
+    outline: none;
+  }
+  .modal-input:focus{ border-color: var(--ice); box-shadow: 0 0 0 1px rgba(111,168,220,0.25); }
+  .modal-err{
+    min-height: 18px;
+    color: #D9748A;
+    font-family: var(--mono);
+    font-size: 11.5px;
+    margin-top: 8px;
+  }
+  .modal-actions{
+    display:flex;
+    justify-content: flex-end;
+    gap: 10px;
+    margin-top: 20px;
+  }
+  .btn-modal-cancel, .btn-modal-confirm{
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.04em;
+    padding: 10px 16px;
+    border-radius: 4px;
+    cursor: pointer;
+    border: 1px solid var(--line);
+    background: transparent;
+    color: var(--ink-dim);
+  }
+  .btn-modal-cancel:hover{ color: var(--ink); border-color: var(--ink-faint); }
+  .btn-modal-confirm{
+    border-color: var(--ice);
+    color: var(--ice);
+    font-weight: 600;
+  }
+  .btn-modal-confirm:hover{ background: rgba(111,168,220,0.12); }
+  .btn-modal-confirm.danger{ border-color: #D9748A; color: #D9748A; }
+  .btn-modal-confirm.danger:hover{ background: rgba(217,116,138,0.12); }
+
+  .preview-summary{
+    font-family: var(--mono);
+    font-size: 12.5px;
+    color: var(--ink-dim);
+    margin-bottom: 12px;
+    line-height: 1.6;
+  }
+  .preview-summary b{ color: var(--white); font-weight: 600; }
+  .preview-warnings{ margin-bottom: 12px; }
+  .preview-warning-item{
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--warn);
+    border: 1px solid var(--warn);
+    border-radius: 4px;
+    padding: 9px 12px;
+    margin-bottom: 6px;
+    background: rgba(217,168,78,0.08);
+  }
+  .preview-warning-item.severe{
+    color: #D9748A;
+    border-color: #D9748A;
+    background: rgba(217,116,138,0.08);
+  }
+  .preview-table-wrap{
+    max-height: 280px;
+    overflow-y: auto;
+    border: 1px solid var(--line);
+    border-radius: 4px;
+  }
+  .preview-table{ width:100%; border-collapse: collapse; font-size: 12px; }
+  .preview-table thead th{
+    background: var(--bg-raised-2);
+    text-align:left;
+    padding: 7px 8px;
+    font-family: var(--mono);
+    font-size: 9.5px;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    border-bottom: 1px solid var(--line);
+    white-space: nowrap;
+    position: sticky;
+    top: 0;
+  }
+  .preview-table tbody td{
+    padding: 6px 8px;
+    border-bottom: 1px solid var(--line-soft);
+    white-space: nowrap;
+    color: var(--ink-dim);
+  }
+  .preview-table tbody tr:last-child td{ border-bottom: none; }
+  .preview-more-row td{
+    text-align:center;
+    color: var(--ink-faint);
+    font-style: italic;
+  }
+  @media (max-width: 600px){
+    .modal-box{ padding: 20px; }
+    .preview-table-wrap{ max-height: 220px; }
+  }
+
+  /* ---------- SUMMARY STRIP (the thesis) ---------- */
+  .summary{
+    display:grid;
+    grid-template-columns: 1.3fr 1fr 1fr 1.4fr;
+    gap: 1px;
+    background: var(--line);
+    border: 1px solid var(--line);
+    margin-bottom: 36px;
+  }
+  .sum-cell{
+    background: var(--bg-raised);
+    padding: 22px 24px;
+    position: relative;
+  }
+  .sum-label{
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    margin-bottom: 10px;
+  }
+  .sum-value{
+    font-family: var(--serif);
+    font-size: 32px;
+    color: var(--white);
+    font-weight: 500;
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+  }
+  .sum-value small{ font-size: 16px; color: var(--ink-dim); font-family: var(--grotesk); margin-left: 6px;}
+  .sum-sub{ margin-top: 8px; font-size: 12px; color: var(--ink-dim); }
+  .mix-bar{ display:flex; height: 6px; border-radius: 2px; overflow:hidden; margin-top: 14px; }
+  .mix-bar span{ height:100%; }
+  .mix-legend{ display:flex; flex-wrap:wrap; gap: 10px 16px; margin-top: 10px; font-size: 11px; color: var(--ink-dim);}
+  .mix-legend i{ width:7px; height:7px; display:inline-block; border-radius:1px; margin-right:5px; position:relative; top:-1px;}
+
+  /* ---------- CONTROLS ---------- */
+  .controls{
+    display:flex;
+    gap: 14px;
+    align-items: flex-end;
+    flex-wrap: wrap;
+    margin-bottom: 18px;
+  }
+  .field{ display:flex; flex-direction:column; gap:6px; }
+  .field label{
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+  }
+  .field select, .field input{
+    background: var(--bg-raised);
+    border: 1px solid var(--line);
+    color: var(--ink);
+    padding: 9px 12px;
+    font-family: var(--grotesk);
+    font-size: 13px;
+    border-radius: 3px;
+    outline: none;
+    min-width: 110px;
+  }
+  .field select:focus, .field input:focus{
+    border-color: var(--ice);
+    box-shadow: 0 0 0 1px rgba(111,168,220,0.25);
+  }
+  .field.search{ flex: 1; min-width: 200px; }
+  .field.search input{ width: 100%; }
+  .field select{ cursor:pointer; }
+
+  /* ---------- MULTI-SELECT DROPDOWN ---------- */
+  .msel{ position: relative; }
+  .msel-btn{
+    background: var(--bg-raised);
+    border: 1px solid var(--line);
+    color: var(--ink);
+    padding: 9px 10px;
+    font-family: var(--grotesk);
+    font-size: 13px;
+    border-radius: 3px;
+    outline: none;
+    min-width: 110px;
+    display:flex;
+    align-items:center;
+    justify-content: space-between;
+    gap: 8px;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .msel-btn:hover{ border-color: var(--ink-faint); }
+  .msel.open .msel-btn{ border-color: var(--ice); box-shadow: 0 0 0 1px rgba(111,168,220,0.25); }
+  .msel-btn .msel-label{
+    overflow: hidden;
+    text-overflow: ellipsis;
+    color: var(--ink-dim);
+  }
+  .msel-btn .msel-label.has-value{ color: var(--ink); }
+  .msel-btn .msel-count{
+    font-family: var(--mono);
+    font-size: 9.5px;
+    color: var(--bg);
+    background: var(--ice);
+    border-radius: 8px;
+    padding: 1px 6px;
+    flex-shrink: 0;
+  }
+  .msel-btn .msel-caret{
+    font-size: 9px;
+    color: var(--ink-faint);
+    flex-shrink: 0;
+    transition: transform .12s;
+  }
+  .msel.open .msel-btn .msel-caret{ transform: rotate(180deg); color: var(--ice); }
+  .msel-panel{
+    position: absolute;
+    top: calc(100% + 6px);
+    left: 0;
+    z-index: 50;
+    min-width: 180px;
+    max-width: 260px;
+    background: var(--bg-raised-2);
+    border: 1px solid var(--line);
+    border-radius: 5px;
+    box-shadow: 0 14px 36px rgba(0,0,0,0.45);
+    padding: 6px;
+    display: none;
+  }
+  .msel.open .msel-panel{ display: block; }
+  .msel-panel-actions{
+    display:flex;
+    justify-content: space-between;
+    gap: 6px;
+    padding: 4px 6px 8px;
+    border-bottom: 1px solid var(--line-soft);
+    margin-bottom: 4px;
+  }
+  .msel-panel-actions button{
+    background: none;
+    border: none;
+    color: var(--ice);
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.03em;
+    cursor: pointer;
+    padding: 2px 4px;
+  }
+  .msel-panel-actions button:hover{ text-decoration: underline; }
+  .msel-options{
+    max-height: 230px;
+    overflow-y: auto;
+  }
+  .msel-option{
+    display:flex;
+    align-items:center;
+    gap: 8px;
+    padding: 6px 6px;
+    border-radius: 3px;
+    cursor: pointer;
+    font-size: 12.5px;
+    color: var(--ink);
+  }
+  .msel-option:hover{ background: rgba(111,168,220,0.08); }
+  .msel-option input[type="checkbox"]{ width: 13px; height:13px; flex-shrink:0; }
+  .msel-option .msel-opt-label{ flex: 1; }
+  .msel-option .msel-opt-count{ color: var(--ink-faint); font-family: var(--mono); font-size: 10.5px; }
+  .msel-empty{ padding: 10px 8px; color: var(--ink-faint); font-size: 12px; font-style: italic; }
+  @media (max-width: 600px){
+    .msel-btn{ width: 100%; }
+    .msel-panel{ left: 0; right: 0; max-width: none; width: 100%; }
+  }
+
+  .reset-btn{
+    background: transparent;
+    border: 1px solid var(--line);
+    color: var(--ink-dim);
+    padding: 9px 14px;
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.04em;
+    border-radius: 3px;
+    cursor: pointer;
+    transition: border-color .15s, color .15s;
+    height: 38px;
+  }
+  .reset-btn:hover{ border-color: var(--ice); color: var(--ice); }
+
+  .selection-bar{
+    display:flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    background: var(--bg-raised);
+    border: 1px solid var(--ice-dim);
+    border-radius: 4px;
+    padding: 12px 18px;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+  }
+  .selection-bar.hidden{ display: none; }
+  .selection-info{ font-size: 13px; color: var(--ink); }
+  .selection-info b{ color: var(--white); }
+  .selection-info .sv{ color: var(--ice); font-weight: 600; }
+  .selection-actions{ display:flex; gap: 10px; }
+  .btn-download, .btn-clear-sel{
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.04em;
+    padding: 8px 14px;
+    border-radius: 3px;
+    cursor: pointer;
+    border: 1px solid var(--ice);
+    background: var(--ice);
+    color: #0E0E10;
+    font-weight: 600;
+    transition: opacity .12s;
+  }
+  .btn-download:hover{ opacity: 0.85; }
+  .btn-clear-sel{
+    background: transparent;
+    color: var(--ink-dim);
+    border-color: var(--line);
+    font-weight: 400;
+  }
+  .btn-clear-sel:hover{ color: var(--ice); border-color: var(--ice); }
+
+  .result-line{
+    display:flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: 14px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--line-soft);
+    font-size: 12px;
+    color: var(--ink-faint);
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .result-line b{ color: var(--ink); font-weight: 600; }
+  .sort-row{ display:flex; gap:6px; font-family: var(--mono); font-size: 11px; }
+  .sort-row button{
+    background: none; border:none; color: var(--ink-faint);
+    cursor:pointer; padding: 2px 6px; border-radius: 2px;
+  }
+  .sort-row button.active{ color: var(--ice); background: rgba(111,168,220,0.1); }
+
+  /* ---------- TABLE ---------- */
+  .table-wrap{
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    overflow: hidden;
+  }
+  table{ width: 100%; border-collapse: collapse; }
+  thead th{
+    background: var(--bg-raised-2);
+    text-align: left;
+    padding: 9px 6px;
+    font-family: var(--mono);
+    font-size: 9.5px;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    border-bottom: 1px solid var(--line);
+    white-space: nowrap;
+    cursor: pointer;
+    user-select: none;
+  }
+  thead th:hover{ color: var(--ice); }
+  thead th.num{ text-align: right; }
+  thead th.chk{ width: 26px; cursor: default; padding-right: 2px; padding-left: 8px; }
+  thead th.chk:hover{ color: var(--ink-faint); }
+  thead th .arrow{ opacity: 0.5; margin-left: 2px; font-size: 8px; }
+  tbody tr{
+    border-bottom: 1px solid var(--line-soft);
+    transition: background .1s;
+  }
+  tbody tr:hover{ background: var(--bg-raised); }
+  tbody tr.row-selected{ background: rgba(111,168,220,0.07); }
+  tbody tr:last-child{ border-bottom: none; }
+  tbody td{
+    padding: 7px 6px;
+    white-space: nowrap;
+    font-size: 12.5px;
+    color: var(--ink);
+  }
+  tbody td.chk{ padding: 7px 2px 7px 8px; }
+  tbody td.num{ text-align: right; font-variant-numeric: tabular-nums; color: var(--ink-dim); }
+  tbody td.amt{ color: var(--white); font-weight: 500; }
+  td.cert{ font-family: var(--mono); font-size: 11px; }
+  .cert-link{
+    color: var(--ink-faint);
+    text-decoration: none;
+    border-bottom: 1px dotted var(--ink-faint);
+    transition: color .12s, border-color .12s;
+  }
+  .cert-link:hover{ color: var(--ice); border-color: var(--ice); }
+  .media-link{
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    width: 16px; height: 16px;
+    border-radius: 3px;
+    color: var(--ink-faint);
+    text-decoration: none;
+    transition: color .12s, background .12s;
+  }
+  .media-link:hover{ color: var(--ice); background: rgba(111,168,220,0.1); }
+  .media-link svg{ width: 11px; height: 11px; }
+  .media-dash{ color: var(--ink-faint); padding-left: 2px; }
+  input[type="checkbox"]{
+    width: 14px; height: 14px;
+    accent-color: var(--ice);
+    cursor: pointer;
+  }
+  .lab-tag{
+    font-family: var(--mono);
+    font-size: 9px;
+    padding: 1px 4px;
+    border-radius: 2px;
+    border: 1px solid var(--line);
+    color: var(--ink-dim);
+  }
+  .lab-tag.gia{ border-color: var(--ice-dim); color: var(--ice); }
+  .status-badge{
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    width: 20px; height: 20px;
+    border-radius: 3px;
+    font-family: var(--mono);
+    font-size: 10px;
+    font-weight: 600;
+    border: 1px solid var(--line);
+    color: var(--ink-dim);
+    cursor: default;
+  }
+  .status-badge.status-a{ border-color: var(--good); color: var(--good); }
+  .status-badge.status-b{ border-color: var(--warn); color: var(--warn); }
+  .status-badge.status-m{ border-color: #C0556B; color: #D9748A; }
+  .empty-row td{
+    padding: 60px 20px;
+    text-align: center;
+    color: var(--ink-faint);
+    font-family: var(--mono);
+    font-size: 12px;
+  }
+
+  .scroll-x{ overflow-x: auto; }
+
+  footer{
+    margin-top: 40px;
+    padding-top: 20px;
+    border-top: 1px solid var(--line-soft);
+    font-family: var(--mono);
+    font-size: 10.5px;
+    color: var(--ink-faint);
+    display:flex;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
+  @media (max-width: 900px){
+    .summary{ grid-template-columns: 1fr 1fr; }
+  }
+  @media (max-width: 600px){
+    .app{ padding: 0 16px 60px; }
+    header.top{ flex-direction: column; align-items: flex-start; }
+    .top-meta{ text-align: left; }
+    .upload-row{ justify-content: flex-start; }
+    .summary{ grid-template-columns: 1fr; }
+    .controls{ flex-direction: column; align-items: stretch; }
+    .field{ width: 100%; }
+    .field select, .field input{ width: 100%; }
+  }
+
+  ::selection{ background: var(--ice-dim); color: var(--white); }
+  *:focus-visible{ outline: 1px solid var(--ice); outline-offset: 1px; }
+
+  @media (prefers-reduced-motion: reduce){
+    *{ transition: none !important; }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <header class="top">
+    <div class="brand">
+      <svg viewBox="0 0 40 40" fill="none">
+        <polygon points="20,3 30,14 20,37 10,14" stroke="#6FA8DC" stroke-width="1.2" fill="none"/>
+        <polygon points="20,3 30,14 10,14" stroke="#5F5D5A" stroke-width="0.8" fill="none"/>
+        <line x1="13" y1="14" x2="27" y2="14" stroke="#5F5D5A" stroke-width="0.8"/>
+        <line x1="20" y1="3" x2="20" y2="37" stroke="#3D5A75" stroke-width="0.6"/>
+      </svg>
+      <div class="brand-text">
+        <h1>Inventory</h1>
+      </div>
+    </div>
+    <div class="top-meta">
+      <span id="sourceLine">Source file: <b id="sourceFileName">Stk_2106.xlsx</b></span><br>
+      <span id="stoneCountMeta"></span> certified stones on file
+      <div class="upload-row">
+        <button class="btn-upload" id="uploadBtn">UPDATE</button>
+        <input type="file" id="fileInput" accept=".xlsx,.xls" style="display:none">
+        <button class="btn-reset-data hidden" id="resetDataBtn">RESET TO ORIGINAL</button>
+      </div>
+      <div class="upload-status" id="uploadStatus"></div>
+    </div>
+  </header>
+
+  <div class="controls">
+    <div class="field">
+      <label>Status</label>
+      <div class="msel" id="f-status" data-placeholder="All"></div>
+    </div>
+    <div class="field">
+      <label>Shape</label>
+      <div class="msel" id="f-shape" data-placeholder="All"></div>
+    </div>
+    <div class="field">
+      <label>Lab</label>
+      <div class="msel" id="f-lab" data-placeholder="All"></div>
+    </div>
+    <div class="field">
+      <label>Color</label>
+      <div class="msel" id="f-color" data-placeholder="All"></div>
+    </div>
+    <div class="field">
+      <label>Clarity</label>
+      <div class="msel" id="f-clarity" data-placeholder="All"></div>
+    </div>
+    <div class="field">
+      <label>Cut</label>
+      <div class="msel" id="f-cut" data-placeholder="All"></div>
+    </div>
+    <div class="field">
+      <label>Carat range</label>
+      <div class="msel" id="f-caratrange" data-placeholder="All"></div>
+    </div>
+    <div class="field">
+      <label>Exact carat</label>
+      <div class="msel" id="f-exactsize" data-placeholder="All"></div>
+    </div>
+    <div class="field search">
+      <label>Search certificate #</label>
+      <input type="text" id="f-search" placeholder="e.g. 3545979603">
+    </div>
+    <button class="reset-btn" id="resetBtn">CLEAR FILTERS</button>
+  </div>
+
+  <div class="selection-bar hidden" id="selectionBar">
+    <div class="selection-info">
+      <b id="selCount">0</b> stones selected · <span class="sv" id="selValue">$0</span> total value · <span id="selCarats">0.00</span> ct
+    </div>
+    <div class="selection-actions">
+      <button class="btn-clear-sel" id="clearSelBtn">CLEAR SELECTION</button>
+      <button class="btn-download" id="downloadBtn">DOWNLOAD SELECTION (.XLSX)</button>
+    </div>
+  </div>
+
+  <div class="result-line">
+    <span><b id="resultCount">0</b> stones shown · <b id="resultValue">$0</b> total value</span>
+    <div class="sort-row" id="sortHint">Click a column header to sort</div>
+  </div>
+
+  <div class="table-wrap">
+    <div class="scroll-x">
+      <table>
+        <thead>
+          <tr id="headRow"></tr>
+        </thead>
+        <tbody id="bodyRows"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <footer>
+    <span id="footerSummary">171 stones · Rounds, Ovals, Pears · GIA &amp; HRD certified</span>
+    <span id="genTime"></span>
+  </footer>
+
+</div>
+
+<!-- password gate modal -->
+<div class="modal-overlay hidden" id="pwOverlay">
+  <div class="modal-box">
+    <div class="modal-title">Enter password to update stock</div>
+    <p class="modal-sub">This protects the live inventory from an accidental or incorrect upload.</p>
+    <input type="password" id="pwInput" class="modal-input" placeholder="Password" autocomplete="off">
+    <div class="modal-err" id="pwError"></div>
+    <div class="modal-actions">
+      <button class="btn-modal-cancel" id="pwCancelBtn">CANCEL</button>
+      <button class="btn-modal-confirm" id="pwSubmitBtn">CONTINUE</button>
+    </div>
+  </div>
+</div>
+
+<!-- upload preview / confirmation modal -->
+<div class="modal-overlay hidden" id="previewOverlay">
+  <div class="modal-box modal-box-wide">
+    <div class="modal-title">Review before applying</div>
+    <div class="preview-summary" id="previewSummary"></div>
+    <div class="preview-warnings" id="previewWarnings"></div>
+    <div class="preview-table-wrap">
+      <table class="preview-table">
+        <thead><tr id="previewHeadRow"></tr></thead>
+        <tbody id="previewBodyRows"></tbody>
+      </table>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-modal-cancel" id="previewCancelBtn">CANCEL · DON'T APPLY</button>
+      <button class="btn-modal-confirm" id="previewConfirmBtn">YES, APPLY THIS FILE</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const ORIGINAL_DATA = [{"Range": 40, "Certificate": 3545979603, "Status": "A", "Shape": "ROUND", "Lab": "GIA", "Size": 0.4, "Color": "I", "Clarity": "VS2", "Cut": "EX", "Pol": "EX", "Sym": "EX", "FL": "NON", "Disc%": 42, "Price/ct": 696, "Amt $": 278.4, "Rap": 1200, "Rap Value": 480, "Length": 4.73, "Width": 4.71, "Height": 2.92, "Depth%": 61.9, "Tab %": 58, "Link": null}, {"Range": 50, "Certificate": 6541799716, "Status": "A", "Shape": "ROUND", "Lab": "GIA", "Size": 0.5, "Color": "E", "Clarity": "SI2", "Cut": "VG", "Pol": "EX", "Sym": "VG", "FL": "NON", "Disc%": 48, "Price/ct": 780, "Amt $": 390, "Rap": 1500, "Rap Value": 750, "Length": 4.95, "Width": 4.99, "Height": 3.18, "Depth%": 63.9, "Tab %": 56, "Link": null}, {"Range": 50, "Certificate": 7543586983, "Status": "A", "Shape": "ROUND", "Lab": "GIA", "Size": 0.5, "Color": "F", "Clarity": "SI2", "Cut": "VG", "Pol": "EX", "Sym": "VG", "FL": "NON", "Disc%": 48, "Price/ct": 728, "Amt $": 364, "Rap": 1400, "Rap Value": 700, "Length": 4.94, "Width": 4.99, "Height": 3.21, "Depth%": 64.6, "Tab %": 57, "Link": null}, {"Range": 50, "Certificate": 1545062905, "Status": "A", "Shape": "ROUND", "Lab": "GIA", "Size": 0.5, "Color": "F", "Clarity": "SI2", "Cut": "EX", "Pol": "EX", "Sym": "EX", "FL": "NON", "Disc%": 43, "Price/ct": 798, "Amt $": 399, "Rap": 1400, "Rap Value": 700, "Length": 5.04, "Width": 5.08, "Height": 3.16, "Depth%": 62.5, "Tab %": 57, "Link": null}, {"Range": 50, "Certificate": 260000082659, "Status": "A", "Shape": "ROUND", "Lab": "HRD", "Size": 0.5, "Color": "F", "Clarity": "SI2", "Cut": "VG", "Pol": "EX", "Sym": "VG", "FL": "NON", "Disc%": 55, "Price/ct": 630, "Amt $": 315, "Rap": 1400, "Rap Value": 700, "Length": 5, "Width": 5.06, "Height": 3.11, "Depth%": 61.7, "Tab %": 60, "Link": null}, {"Range": 50, "Certificate": 260000062051, "Status": "A", "Shape": "ROUND", "Lab": "HRD", "Size": 0.5, "Color": "E", "Clarity": "SI2", "Cut": "EX", "Pol": "EX", "Sym": "EX", "FL": "NON", "Disc%": 52, "Price/ct": 720, "Amt $": 360, "Rap": 1500, "Rap Value": 750, "Length": 5.06, "Width": 5.08, "Height": 3.17, "Depth%": 62.4, "Tab %": 57, "Link": null}, {"Range": 50, "Certificate": 260000030040, "Status": "A", "Shape": "ROUND", "Lab": "HRD", "Size": 0.5, "Color": "E", "Clarity": "SI2", "Cut": "EX", "Pol": "EX", "Sym": "EX", "FL": "NON", "Disc%": 52, "Price/ct": 720, "Amt $": 360, "Rap": 1500, "Rap Value": 750, "Length": 5.05, "Width": 5.08, "Height": 3.18, "Depth%": 62.8, "Tab %": 57, "Link": null}, {"Range": 50, "Certificate": 260000033826, "Status": "A", "Shape": "ROUND", "Lab": "HRD", "Size": 0.5, "Color": "F", "Clarity": "SI2", "Cut": "VG", "Pol": "EX", "Sym": "VG", "FL": "NON", "Disc%": 55, "Price/ct": 630, "Amt $": 315, "Rap": 1400, "Rap Value": 700, "Length": 4.96, "Width": 5, "Height": 3.19, "Depth%": 64, "Tab %": 56, "Link": null}, {"Range": 50, "Certificate": 260000024273, "Status": "A", "Shape": "ROUND", "Lab": "HRD", "Size": 0.5, "Color": "F", "Clarity": "SI2", "Cut": "VG", "Pol": "EX", "Sym": "EX", "FL": "NON", "Disc%": 55, "Price/ct": 630, "Amt $": 315, "Rap": 1400, "Rap Value": 700, "Length": 4.93, "Width": 4.97, "Height": 3.17, "Depth%": 64, "Tab %": 56, "Link": null}, {"Range": 50, "Certificate": 260000022548, "Status": "A", "Shape": "ROUND", "Lab": "HRD", "Size": 0.5, "Color": "E", "Clarity": "SI2", "Cut": "EX", "Pol": "EX", "Sym": "VG", "FL": "NON", "Disc%": 54, "Price/ct": 690, "Amt $": 345, "Rap": 1500, "Rap Value": 750, "Length": 5.02, "Width": 5.1, "Height": 3.16, "Depth%": 62.3, "Tab %": 58, "Link": null}, {"Range": 50, "Certificate": 260000030081, "Status": "A", "Shape": "ROUND", "Lab": "HRD", "Size": 0.51, "Color": "E", "Clarity": "SI2", "Cut": "VG", "Pol": "EX", "Sym": "EX", "FL": "NON", "Disc%": 56, "Price/ct": 660, "Amt $": 336.6, "Rap": 1500, "Rap Value": 765, "Length": 5.02, "Width": 5.08, "Height": 3.19, "Depth%": 63.1, "Tab %": 56, "Link": null}, {"Range": 50, "Certificate": 7541405420, "Status": "A", "Shape": "ROUND", "Lab": "GIA", "Size": 0.52, "Color": "E", "Clarity": "SI2", "Cut": "EX", "Pol": "VG", "Sym": "EX", "FL": "NON", "Disc%": 42, "Price/ct": 870, "Amt $": 452.4, "Rap": 1500, "Rap Value": 780, "Length": 5.15, "Width": 5.18, "Height": 3.17, "Depth%": 61.3, "Tab %": 60, "Link": null}, {"Range": 70, "Certificate": 260000095598, "Status": "A", "Shape": "ROUND", "Lab": "HRD", "Size": 0.7, "Color": "E", "Clarity": "SI2", "Cut": "GD", "Pol": "VG", "Sym": "VG", "FL": "NON", "Disc%": 64, "Price/ct": 756, "Amt $": 528.44, "Rap": 2100, "Rap Value": 1467.9, "Length": 5.42, "Width": 5.47, "Height": 3.58, "Depth%": 65.6, "Tab %": 56.0, "Link": null}, {"Range": 70, "Certificate": 260000096419, "Status": "A", "Shape": "ROUND", "Lab": "HRD", "Size": 0.7, "Color": "G", "Clarity": "SI2", "Cut": "VG", "Pol": "VG", "Sym": "VG", "FL": "NON", "Disc%": 62, "Price/ct": 646, "Amt $": 451.55, "Rap": 1700, "Rap Value": 1188.3, "Length": 5.48, "Width": 5.53, "Height": 3.52, "Depth%": 64, "Tab %": 62, "Link": null}, {"Range": 70, "Certificate": 1549645574, "Status": "A", "Shape": "ROUND", "Lab": "GIA", "Size": 0.7, "Color": "D", "Clarity": "SI2", "Cut": "VG", "Pol": "EX", "Sym": "VG", "FL": "NON", "Disc%": 62, "Price/ct": 874, "Amt $": 611.8, "Rap": 2300, "Rap Value": 1610, "Length": 5.54, "Width": 5.57, "Height": 3.54, "Depth%": 63.7, "Tab %": 57, "Link": null}, {"Range": 70, "Certificate": 260000007804, "Status": "A", "Shape": "ROUND", "Lab": "HRD", "Size": 0.7, "Color": "F", "Clarity": "SI2", "Cut": "EX", "Pol": "EX", "Sym": "EX", "FL": "NON", "Disc%": 56, "Price/ct": 836, "Amt $": 585.2, "Rap": 1900, "Rap Value": 1330, "Length": 5.65, "Width": 5.62, "Height": 3.56, "Depth%": 63, "Tab %": 55, "Link": "https://video.diamlist.com/VideoPage.aspx?stoneid=TN0112343"}, {"Range": 70, "Certificate": 250000302777, "Status": "A", "Shape": "ROUND", "Lab": "HRD", "Size": 0.7, "Color": "F", "Clarity": "SI1", "Cut": "VG", "Pol": "EX", "Sym": "VG", "FL": "NON", "Disc%": 62, "Price/ct": 836, "Amt $": 585.2, "Rap": 2200, "Rap Value": 1540, "Length": 5.59, "Width": 5.52, "Height": 3.52, "Depth%": 63.1, "Tab %": 63, "Link": "https://video.diamlist.com/VideoPage.aspx?stoneid=TN0105051"}, {"Range": 70, "Certificate": 260000083432, "Status": "A", "Shape": "ROUND", "Lab": "HRD", "Size": 0.7, "Color": "F", "Clarity": "SI2", "Cut": "EX", "Pol": "EX", "Sym": "EX", "FL": "NON", "Disc%": 56, "Price/ct": 836, "Amt $": 585.2, "Rap": 1900, "Rap Value": 1330, "Length": 5.65, "Width": 5.68, "Height": 3.56, "Depth%": 62.7, "Tab %": 57, "Link": null}, {"Range": 70, "Certificate": 260000079693, "Status": "A", "Shape": "ROUND", "Lab": "HRD", "Size": 0.7, "Color": "F", "Clarity": "SI2", "Cut": "EX", "Pol": "EX", "Sym": "EX", "FL": "NON", "Disc%": 56, "Price/ct": 836, "Amt $": 585.2, "Rap": 1900, "Rap Value": 1330, "Length": 5.67, "Width": 5.71, "Height": 3.48, "Depth%": 61.1, "Tab %": 59, "Link": null}, {"Range": 70, "Certificate": 260000072531, "Status": "A", "Shape": "ROUND", "Lab": "HRD", "Size": 0.7, "Color": "G", "Clarity": "SI2", "Cut": "EX", "Pol": "EX", "Sym": "EX", "FL": "MED", "Disc%": 60, "Price/ct": 680, "Amt $": 476.0, "Rap": 1700, "Rap Value": 1190, "Length": 5.62, "Width": 5.68, "Height": 3.55, "Depth%": 62.7, "Tab %": 57, "Link": null}, {"Range": 70, "Certificate": 260000067501, "Status": "A", "Shape": "ROUND", "Lab": "HRD", "Size": 0.7, "Color": "D", "Clarity": "SI2", "Cut": "EX", "Pol": "EX", "Sym": "EX", "FL": "SLT", "Disc%": 58, "Price/ct": 966, "Amt $": 676.2, "Rap": 2300, "Rap Value": 1610, "Length": 5.68, "Width": 5.71, "Height": 3.49, "Depth%": 61.2, "Tab %": 59, "Link": null}, {"Range": 70, "Certificate": 260000058170, "Status": "A", "Shape": "ROUND", "Lab": "HRD", "Size": 0.7, "Color": "F", "Clarity": "SI2", "Cut": "EX", "Pol": "EX", "Sym": "VG", "FL": "NON", "Disc%": 58, "Price/ct": 798, "Amt $": 558.6, "Rap": 1900, "Rap Value": 1330, "Length": 5.63, "Width": 5.68, "Height": 3.57, "Depth%": 63, "Tab %": 55, "Link": null}, {"Range": 70, "Certificate": 260000038316, "Status": "A", "Shape": "ROUND", "Lab": "HRD", "Size": 0.7, "Color": "D", "Clarity": "SI2", "Cut": "EX", "Pol": "EX", "Sym": "EX", "FL": "SLT", "Disc%": 58, "Price/ct": 966, "Amt $": 676.2, "Rap": 2300, "Rap Value": 1610, "Length": 5.66, "Width": 5.7, "Height": 3.51, "Depth%": 61.7, "Tab %": 58, "Link": null}, {"Range": 70, "Certificate": 260000095915, "Status": "A", "Shape": "ROUND", "Lab": "HRD", "Size": 0.7, "Color": "E", "Clarity": "SI2", "Cut": "VG", "Pol": "VG", "Sym": "VG", "FL": "NON", "Disc%": 62, "Price/ct": 798, "Amt $": 558.6, "Rap": 2100, "Rap Value": 1470, "Length": 5.58, "Width": 5.61, "Height": 3.56, "Depth%": 63.6, "Tab %": 54, "Link": null}, {"Range": 70, "Certificate": 260000095633, "Status": "A", "Shape": "ROUND", "Lab": "HRD", "Size": 0.7, "Color": "F", "Clarity": "SI2", "Cut": "VG", "Pol": "VG", "Sym": "VG", "FL": "NON", "Disc%": 62, "Price/ct": 722, "Amt $": 506.12, "Rap": 1900, "Rap Value": 1331.9, "Length": 5.46, "Width": 5.52, "Height": 3.51, "Depth%": 63.9, "Tab %": 60, "Link": null}, {"Range": 70, "Certificate": 260000095933, "Status": "A", "Shape": "ROUND", "Lab": "HRD", "Size": 0.7, "Color": "F", "Clarity": "SI2", "Cut": "GD", "Pol": "VG", "Sym": "VG", "FL": "NON", "Disc%": 64, "Price/ct": 684, "Amt $": 479.48, "Rap": 1900, "Rap Value": 1331.9, "Length": 5.49, "Width": 5.56, "Height": 3.57, "Depth%": 64.4, "Tab %": 54, "Link": null}, {"Range": 70, "Certificate": 260000096407, "Status": "A", "Shape": "ROUND", "Lab": "HRD", "Size": 0.7, "Color": "E", "Clarity": "SI2", "Cut": "GD", "Pol": "VG", "Sym": "VG", "FL": "STG", "Disc%": 71, "Price/ct": 609, "Amt $": 427.52, "Rap": 2100, "Rap Value": 1474.2, "Length": 5.42, "Width": 5.48, "Height": 3.61, "Depth%": 66.1, "Tab %": 59, "Link": null}, {"Range": 70, "Certificate": 260000095582, "Status": "A", "Shape": "ROUND", "Lab": "HRD", "Size": 0.7, "Color": "F", "Clarity": "SI2", "Cut": "GD", "Pol": "VG", "Sym": "VG", "FL": "SLT", "Disc%": 66, "Price/ct": 646, "Amt $": 453.49, "Rap": 1900, "Rap Value": 1333.8, "Length": 5.46, "Width": 5.48, "Height": 3.61, "Depth%": 66, "Tab %": 57.0, "Link": null}, {"Range": 70, "Certificate": 260000095639, "Status": "A", "Shape": "ROUND", "Lab": "HRD", "Size": 0.7, "Color": "E", "Clarity": "SI2", "Cut": "VG", "Pol": "VG", "Sym": "VG", "FL": "NON", "Disc%": 62, "Price/ct": 798, "Amt $": 560.2, "Rap": 2100, "Rap Value": 1474.2, "Length": 5.61, "Width": 5.67, "Height": 3.43, "Depth%": 60.8, "Tab %": 58.0, "Link": null}, {"Range": 70, "Certificate": 260000095643, "Status": "A", "Shape": "ROUND", "Lab": "HRD", "Size": 0.7, "Color": "G", "Clarity": "SI2", "Cut": "VG", "Pol": "VG", "Sym": "VG", "FL": "SLT", "Disc%": 64, "Price/ct": 612, "Amt $": 429.62, "Rap": 1700, "Rap Value": 1193.4, "Length": 5.68, "Width": 5.75, "Height": 3.34, "Depth%": 58.3, "Tab %": 64, "Link": null}, {"Range": 70, "Certificate": 260000096402, "Status": "A", "Shape": "ROUND", "Lab": "HRD", "Size": 0.7, "Color": "E", "Clarity": "VS2", "Cut": "GD", "Pol": "VG", "Sym": "VG", "FL": "MED", "Disc%": 68, "Price/ct": 896, "Amt $": 629.89, "Rap": 2800, "Rap Value": 1968.4, "Length": 5.41, "Width": 5.5, "Height": 3.58, "Depth%": 65.5, "Tab %": 56.0, "Link": null}, {"Range": 70, "Certificate": 260000096717, "Status": "A", "Shape": "ROUND", "Lab": "HRD", "Size": 0.7, "Color": "F", "Clarity": "SI2", "Cut": "VG", "Pol": "VG", "Sym": "VG", "FL": "NON", "Disc%": 62, "Price/ct": 722, "Amt $": 507.57, "Rap": 1900, "Rap Value": 1335.7, "Length": 5.47, "Width": 5.53, "Height": 3.54, "Depth%": 64.3, "Tab %": 56.0, "Link": null}, {"Range": 70, "Certificate": 260000095478, "Status": "A", "Shape": "ROUND", "Lab": "HRD", "Size": 0.7, "Color": "E", "Clarity": "SI2", "Cut": "GD", "Pol": "VG", "Sym": "VG", "FL": "SLT", "Disc%": 66, "Price/ct": 714, "Amt $": 501.94, "Rap": 2100, "Rap Value": 1476.3, "Length": 5.46, "Width": 5.51, "Height": 3.63, "Depth%": 66.2, "Tab %": 57.0, "Link": null}, {"Range": 70, "Certificate": 260000095479, "Status": "A", "Shape": "ROUND", "Lab": "HRD", "Size": 0.7, "Color": "F", "Clarity": "SI2", "Cut": "GD", "Pol": "VG", "Sym": "VG", "FL": "NON", "Disc%": 64, "Price/ct": 684, "Amt $": 480.85, "Rap": 1900, "Rap Value": 1335.7, "Length": 5.53, "Width": 5.61, "Height": 3.41, "Depth%": 61, "Tab %": 64, "Link": null}, {"Range": 70, "Certificate": 260000095492, "Status": "A", "Shape": "ROUND", "Lab": "HRD", "Size": 0.7, "Color": "F", "Clarity": "SI2", "Cut": "VG", "Pol": "VG", "Sym": "VG", "FL": "NON", "Disc%": 62, "Price/ct": 722, "Amt $": 507.57, "Rap": 1900, "Rap Value": 1335.7, "Length": 5.72, "Width": 5.76, "Height": 3.44, "Depth%": 59.9, "Tab %": 63, "Link": null}, {"Range": 70, "Certificate": 260000095615, "Status": "A", "Shape": "ROUND", "Lab": "HRD", "Size": 0.7, "Color": "D", "Clarity": "SI2", "Cut": "VG", "Pol": "VG", "Sym": "VG", "FL": "NON", "Disc%": 62, "Price/ct": 874, "Amt $": 614.42, "Rap": 2300, "Rap Value": 1616.9, "Length": 5.49, "Width": 5.53, "Height": 3.56, "Depth%": 64.7, "Tab %": 58.0, "Link": null}, {"Range": 70, "Certificate": 260000095631, "Status": "A", "Shape": "ROUND", "Lab": "HRD", "Size": 0.7, "Color": "F", "Clarity": "SI2", "Cut": "GD", "Pol": "EX", "Sym": "VG", "FL": "NON", "Disc%": 64, "Price/ct": 684, "Amt $": 480.85, "Rap": 1900, "Rap Value": 1335.7, "Length": 5.43, "Width": 5.51, "Height": 3.62, "Depth%": 66, "Tab %": 57.0, "Link": null}, {"Range": 70, "Certificate": 260000096726, "Status": "A", "Shape": "ROUND", "Lab": "HRD", "Size": 0.7, "Color": "F", "Clarity": "SI2", "Cut": "VG", "Pol": "EX", "Sym": "VG", "FL": "NON", "Disc%": 62, "Price/ct": 722, "Amt $": 508.29, "Rap": 1900, "Rap Value": 1337.6, "Length": 5.47, "Width": 5.51, "Height": 3.53, "Depth%": 64.3, "Tab %": 64, "Link": null}, {"Range": 70, "Certificate": 260000095482, "Status": "A", "Shape": "ROUND", "Lab": "HRD", "Size": 0.7, "Color": "E", "Clarity": "SI2", "Cut": "VG", "Pol": "VG", "Sym": "VG", "FL": "SLT", "Disc%": 64, "Price/ct": 756, "Amt $": 532.22, "Rap": 2100, "Rap Value": 1478.4, "Length": 5.49, "Width": 5.53, "Height": 3.6, "Depth%": 65.3, "Tab %": 56.0, "Link": null}, {"Range": 70, "Certificate": 260000095579, "Status": "A", "Shape": "ROUND", "Lab": "HRD", "Size": 0.7, "Color": "F", "Clarity": "SI2", "Cut": "VG", "Pol": "EX", "Sym": "VG", "FL": "NON", "Disc%": 62, "Price/ct": 722, "Amt $": 508.29, "Rap": 1900, "Rap Value": 1337.6, "Length": 5.54, "Width": 5.58, "Height": 3.48, "Depth%": 62.7, "Tab %": 60, "Link": null}, {"Range": 70, "Certificate": 260000095580, "Status": "A", "Shape": "ROUND", "Lab": "HRD", "Size": 0.7, "Color": "G", "Clarity": "SI2", "Cut": "VG", "Pol": "EX", "Sym": "VG", "FL": "STG", "Disc%": 68, "Price/ct": 544, "Amt $": 382.98, "Rap": 1700, "Rap Value": 1196.8, "Length": 5.42, "Width": 5.51, "Height": 3.55, "Depth%": 64.6, "Tab %": 58.0, "Link": null}, {"Range": 70, "Certificate": 260000095602, "Status": "A", "Shape": "ROUND", "Lab": "HRD", "Size": 0.7, "Color": "G", "Clarity": "SI2", "Cut": "VG", "Pol": "VG", "Sym": "VG", "FL": "SLT", "Disc%": 64, "Price/ct": 612, "Amt $": 430.85, "Rap": 1700, "Rap Value": 1196.8, "Length": 5.52, "Width": 5.59, "Height": 3.6, "Depth%": 64.8, "Tab %": 57.0, "Link": null}, {"Range": 70, "Certificate": 260000095611, "Status": "A", "Shape": "ROUND", "Lab": "HRD", "Size": 0.7, "Color": "D", "Clarity": "SI2", "Cut": "VG", "Pol": "VG", "Sym": "VG", "FL": "SLT", "Disc%": 64, "Price/ct": 828, "Amt $": 582.91, "Rap": 2300, "Rap Value": 1619.2, "Length": 5.63, "Width": 5.69, "Height": 3.55, "Depth%": 62.8, "Tab %": 57.0, "Link": null}, {"Range": 70, "Certificate": 260000095635, "Status": "A", "Shape": "ROUND", "Lab": "HRD", "Size": 0.7, "Color": "D", "Clarity": "SI2", "Cut": "GD", "Pol": "VG", "Sym": "VG", "FL": "NON", "Disc%": 64, "Price/ct": 828, "Amt $": 582.91, "Rap": 2300, "Rap Value": 1619.2, "Length": 5.47, "Width": 5.53, "Height": 3.63, "Depth%": 66, "Tab %": 55.0, "Link": null}, {"Range": 70, "Certificate": 260000095644, "Status": "B", "Shape": "ROUND", "Lab": "HRD", "Size": 0.7, "Color": "G", "Clarity": "SI2", "Cut": "VG", "Pol": "EX", "Sym": "VG", "FL": "NON", "Disc%": 62, "Price/ct": 646, "Amt $": 454.78, "Rap": 1700, "Rap Value": 1196.8, "Length": 5.52, "Width": 5.57, "Height": 3.46, "Depth%": 62.3, "Tab %": 63, "Link": null}, {"Range": 70, "Certificate": 260000095938, "Status": "B", "Shape": "ROUND", "Lab": "HRD", "Size": 0.7, "Color": "E", "Clarity": "SI2", "Cut": "GD", "Pol": "VG", "Sym": "VG", "FL": "MED", "Disc%": 68, "Price/ct": 672, "Amt $": 473.09, "Rap": 2100, "Rap Value": 1478.4, "Length": 5.44, "Width": 5.5, "Height": 3.61, "Depth%": 65.9, "Tab %": 57.0, "Link": null}, {"Range": 70, "Certificate": 260000096728, "Status": "B", "Shape": "ROUND", "Lab": "HRD", "Size": 0.7, "Color": "G", "Clarity": "SI2", "Cut": "GD", "Pol": "VG", "Sym": "VG", "FL": "NON", "Disc%": 64, "Price/ct": 612, "Amt $": 431.46, "Rap": 1700, "Rap Value": 1198.5, "Length": 5.44, "Width": 5.49, "Height": 3.59, "Depth%": 65.7, "Tab %": 57.0, "Link": null}, {"Range": 70, "Certificate": 260000096405, "Status": "B", "Shape": "ROUND", "Lab": "HRD", "Size": 0.7, "Color": "F", "Clarity": "SI2", "Cut": "VG", "Pol": "EX", "Sym": "VG", "FL": "NON", "Disc%": 62, "Price/ct": 722, "Amt $": 509.01, "Rap": 1900, "Rap Value": 1339.5, "Length": 5.56, "Width": 5.61, "Height": 3.54, "Depth%": 63.3, "Tab %": 55.0, "Link": null}, {"Range": 70, "Certificate": 260000095491, "Status": "B", "Shape": "ROUND", "Lab": "HRD", "Size": 0.7, "Color": "F", "Clarity": "SI2", "Cut": "VG", "Pol": "VG", "Sym": "VG", "FL": "NON", "Disc%": 62, "Price/ct": 722, "Amt $": 509.01, "Rap": 1900, "Rap Value": 1339.5, "Length": 5.62, "Width": 5.65, "Height": 3.49, "Depth%": 62, "Tab %": 64, "Link": null}, {"Range": 70, "Certificate": 260000095586, "Status": "B", "Shape": "ROUND", "Lab": "HRD", "Size": 0.7, "Color": "E", "Clarity": "SI2", "Cut": "VG", "Pol": "VG", "Sym": "VG", "FL": "NON", "Disc%": 62, "Price/ct": 798, "Amt $": 562.59, "Rap": 2100, "Rap Value": 1480.5, "Length": 5.62, "Width": 5.66, "Height": 3.44, "Depth%": 61, "Tab %": 64, "Link": null}, {"Range": 70, "Certificate": 260000095589, "Status": "B", "Shape": "ROUND", "Lab": "HRD", "Size": 0.7, "Color": "E", "Clarity": "SI2", "Cut": "VG", "Pol": "VG", "Sym": "VG", "FL": "NON", "Disc%": 62, "Price/ct": 798, "Amt $": 562.59, "Rap": 2100, "Rap Value": 1480.5, "Length": 5.49, "Width": 5.5, "Height": 3.52, "Depth%": 63.9, "Tab %": 58.0, "Link": null}, {"Range": 70, "Certificate": 260000095593, "Status": "B", "Shape": "ROUND", "Lab": "HRD", "Size": 0.7, "Color": "D", "Clarity": "SI2", "Cut": "VG", "Pol": "VG", "Sym": "VG", "FL": "SLT", "Disc%": 64, "Price/ct": 828, "Amt $": 583.74, "Rap": 2300, "Rap Value": 1621.5, "Length": 5.51, "Width": 5.57, "Height": 3.55, "Depth%": 64.1, "Tab %": 56.0, "Link": null}, {"Range": 70, "Certificate": 260000095594, "Status": "B", "Shape": "ROUND", "Lab": "HRD", "Size": 0.7, "Color": "E", "Clarity": "SI1", "Cut": "VG", "Pol": "VG", "Sym": "VG", "FL": "SLT", "Disc%": 64, "Price/ct": 864, "Amt $": 609.12, "Rap": 2400, "Rap Value": 1692, "Length": 5.44, "Width": 5.47, "Height": 3.57, "Depth%": 65.4, "Tab %": 55.0, "Link": null}, {"Range": 70, "Certificate": 260000096723, "Status": "B", "Shape": "ROUND", "Lab": "HRD", "Size": 0.71, "Color": "E", "Clarity": "SI2", "Cut": "VG", "Pol": "EX", "Sym": "VG", "FL": "MED", "Disc%": 66, "Price/ct": 714, "Amt $": 504.08, "Rap": 2100, "Rap Value": 1482.6, "Length": 5.59, "Width": 5.66, "Height": 3.53, "Depth%": 62.5, "Tab %": 55.0, "Link": null}, {"Range": 70, "Certificate": 260000095584, "Status": "B", "Shape": "ROUND", "Lab": "HRD", "Size": 0.71, "Color": "G", "Clarity": "SI2", "Cut": "VG", "Pol": "VG", "Sym": "VG", "FL": "NON", "Disc%": 62, "Price/ct": 646, "Amt $": 456.08, "Rap": 1700, "Rap Value": 1200.2, "Length": 5.63, "Width": 5.67, "Height": 3.43, "Depth%": 60.8, "Tab %": 60, "Link": null}, {"Range": 70, "Certificate": 260000095585, "Status": "B", "Shape": "ROUND", "Lab": "HRD", "Size": 0.71, "Color": "D", "Clarity": "SI1", "Cut": "VG", "Pol": "VG", "Sym": "VG", "FL": "SLT", "Disc%": 64, "Price/ct": 936, "Amt $": 660.82, "Rap": 2600, "Rap Value": 1835.6, "Length": 5.74, "Width": 5.8, "Height": 3.34, "Depth%": 57.9, "Tab %": 63, "Link": null}, {"Range": 70, "Certificate": 260000095595, "Status": "B", "Shape": "ROUND", "Lab": "HRD", "Size": 0.71, "Color": "E", "Clarity": "SI2", "Cut": "GD", "Pol": "VG", "Sym": "VG", "FL": "NON", "Disc%": 64, "Price/ct": 756, "Amt $": 533.74, "Rap": 2100, "Rap Value": 1482.6, "Length": 5.45, "Width": 5.53, "Height": 3.62, "Depth%": 65.9, "Tab %": 54, "Link": null}, {"Range": 70, "Certificate": 260000095600, "Status": "B", "Shape": "ROUND", "Lab": "HRD", "Size": 0.71, "Color": "E", "Clarity": "SI2", "Cut": "GD", "Pol": "VG", "Sym": "VG", "FL": "MED", "Disc%": 68, "Price/ct": 672, "Amt $": 474.43, "Rap": 2100, "Rap Value": 1482.6, "Length": 5.48, "Width": 5.55, "Height": 3.59, "Depth%": 64.9, "Tab %": 54, "Link": null}, {"Range": 70, "Certificate": 260000095645, "Status": "B", "Shape": "ROUND", "Lab": "HRD", "Size": 0.71, "Color": "E", "Clarity": "SI2", "Cut": "VG", "Pol": "VG", "Sym": "VG", "FL": "NON", "Disc%": 62, "Price/ct": 798, "Amt $": 563.39, "Rap": 2100, "Rap Value": 1482.6, "Length": 5.57, "Width": 5.65, "Height": 3.5, "Depth%": 62.4, "Tab %": 53, "Link": null}, {"Range": 70, "Certificate": 260000095939, "Status": "B", "Shape": "ROUND", "Lab": "HRD", "Size": 0.71, "Color": "F", "Clarity": "SI2", "Cut": "GD", "Pol": "VG", "Sym": "VG", "FL": "SLT", "Disc%": 66, "Price/ct": 646, "Amt $": 456.08, "Rap": 1900, "Rap Value": 1341.4, "Length": 5.4, "Width": 5.46, "Height": 3.62, "Depth%": 66.5, "Tab %": 55.0, "Link": null}, {"Range": 70, "Certificate": 260000095945, "Status": "B", "Shape": "ROUND", "Lab": "HRD", "Size": 0.71, "Color": "E", "Clarity": "SI2", "Cut": "VG", "Pol": "EX", "Sym": "VG", "FL": "NON", "Disc%": 62, "Price/ct": 798, "Amt $": 564.19, "Rap": 2100, "Rap Value": 1484.7, "Length": 5.8, "Width": 5.82, "Height": 3.36, "Depth%": 57.8, "Tab %": 64, "Link": null}, {"Range": 70, "Certificate": 260000095960, "Status": "B", "Shape": "ROUND", "Lab": "HRD", "Size": 0.71, "Color": "E", "Clarity": "SI2", "Cut": "VG", "Pol": "EX", "Sym": "VG", "FL": "NON", "Disc%": 62, "Price/ct": 798, "Amt $": 564.19, "Rap": 2100, "Rap Value": 1484.7, "Length": 5.55, "Width": 5.59, "Height": 3.53, "Depth%": 63.3, "Tab %": 64, "Link": null}, {"Range": 70, "Certificate": 260000096415, "Status": "B", "Shape": "ROUND", "Lab": "HRD", "Size": 0.71, "Color": "G", "Clarity": "SI2", "Cut": "VG", "Pol": "EX", "Sym": "VG", "FL": "SLT", "Disc%": 64, "Price/ct": 612, "Amt $": 433.3, "Rap": 1700, "Rap Value": 1203.6, "Length": 5.58, "Width": 5.61, "Height": 3.48, "Depth%": 62.2, "Tab %": 63, "Link": null}, {"Range": 70, "Certificate": 260000096422, "Status": "B", "Shape": "ROUND", "Lab": "HRD", "Size": 0.71, "Color": "G", "Clarity": "SI2", "Cut": "VG", "Pol": "VG", "Sym": "VG", "FL": "SLT", "Disc%": 64, "Price/ct": 612, "Amt $": 433.3, "Rap": 1700, "Rap Value": 1203.6, "Length": 5.48, "Width": 5.54, "Height": 3.59, "Depth%": 65.2, "Tab %": 55.0, "Link": null}, {"Range": 70, "Certificate": 260000095607, "Status": "B", "Shape": "ROUND", "Lab": "HRD", "Size": 0.71, "Color": "E", "Clarity": "SI2", "Cut": "EX", "Pol": "EX", "Sym": "VG", "FL": "NON", "Disc%": 58, "Price/ct": 882, "Amt $": 625.34, "Rap": 2100, "Rap Value": 1488.9, "Length": 5.61, "Width": 5.64, "Height": 3.56, "Depth%": 63.3, "Tab %": 59, "Link": null}, {"Range": 70, "Certificate": 260000095618, "Status": "B", "Shape": "ROUND", "Lab": "HRD", "Size": 0.71, "Color": "E", "Clarity": "SI2", "Cut": "VG", "Pol": "VG", "Sym": "VG", "FL": "NON", "Disc%": 62, "Price/ct": 798, "Amt $": 565.78, "Rap": 2100, "Rap Value": 1488.9, "Length": 5.47, "Width": 5.53, "Height": 3.59, "Depth%": 65.1, "Tab %": 55.0, "Link": null}, {"Range": 70, "Certificate": 260000095624, "Status": "B", "Shape": "ROUND", "Lab": "HRD", "Size": 0.71, "Color": "G", "Clarity": "SI2", "Cut": "VG", "Pol": "VG", "Sym": "VG", "FL": "NON", "Disc%": 62, "Price/ct": 646, "Amt $": 458.01, "Rap": 1700, "Rap Value": 1205.3, "Length": 5.59, "Width": 5.62, "Height": 3.43, "Depth%": 61.2, "Tab %": 63, "Link": null}, {"Range": 70, "Certificate": 260000095930, "Status": "B", "Shape": "ROUND", "Lab": "HRD", "Size": 0.71, "Color": "F", "Clarity": "SI2", "Cut": "VG", "Pol": "VG", "Sym": "VG", "FL": "NON", "Disc%": 62, "Price/ct": 722, "Amt $": 511.9, "Rap": 1900, "Rap Value": 1347.1, "Length": 5.51, "Width": 5.56, "Height": 3.58, "Depth%": 64.7, "Tab %": 57.0, "Link": null}, {"Range": 70, "Certificate": 260000095940, "Status": "B", "Shape": "ROUND", "Lab": "HRD", "Size": 0.71, "Color": "F", "Clarity": "SI2", "Cut": "VG", "Pol": "EX", "Sym": "VG", "FL": "NON", "Disc%": 62, "Price/ct": 722, "Amt $": 511.9, "Rap": 1900, "Rap Value": 1347.1, "Length": 5.61, "Width": 5.63, "Height": 3.49, "Depth%": 62.2, "Tab %": 53, "Link": null}, {"Range": 70, "Certificate": 260000095958, "Status": "B", "Shape": "ROUND", "Lab": "HRD", "Size": 0.71, "Color": "G", "Clarity": "SI2", "Cut": "VG", "Pol": "EX", "Sym": "VG", "FL": "NON", "Disc%": 62, "Price/ct": 646, "Amt $": 458.01, "Rap": 1700, "Rap Value": 1205.3, "Length": 5.48, "Width": 5.56, "Height": 3.54, "Depth%": 64, "Tab %": 63, "Link": null}, {"Range": 70, "Certificate": 260000019097, "Status": "B", "Shape": "ROUND", "Lab": "HRD", "Size": 0.71, "Color": "E", "Clarity": "SI2", "Cut": "VG", "Pol": "VG", "Sym": "VG", "FL": "NON", "Disc%": 62, "Price/ct": 798, "Amt $": 566.58, "Rap": 2100, "Rap Value": 1491, "Length": 5.52, "Width": 5.59, "Height": 3.57, "Depth%": 64, "Tab %": 57, "Link": null}, {"Range": 70, "Certificate": 260000096403, "Status": "B", "Shape": "ROUND", "Lab": "HRD", "Size": 0.71, "Color": "G", "Clarity": "SI2", "Cut": "VG", "Pol": "VG", "Sym": "VG", "FL": "NON", "Disc%": 62, "Price/ct": 646, "Amt $": 458.66, "Rap": 1700, "Rap Value": 1207, "Length": 5.51, "Width": 5.55, "Height": 3.57, "Depth%": 64.4, "Tab %": 64, "Link": null}, {"Range": 70, "Certificate": 260000095620, "Status": "B", "Shape": "ROUND", "Lab": "HRD", "Size": 0.71, "Color": "F", "Clarity": "SI2", "Cut": "GD", "Pol": "VG", "Sym": "VG", "FL": "NON", "Disc%": 64, "Price/ct": 684, "Amt $": 485.64, "Rap": 1900, "Rap Value": 1349, "Length": 5.46, "Width": 5.52, "Height": 3.62, "Depth%": 65.8, "Tab %": 56.0, "Link": null}, {"Range": 70, "Certificate": 260000095925, "Status": "B", "Shape": "ROUND", "Lab": "HRD", "Size": 0.71, "Color": "F", "Clarity": "SI2", "Cut": "VG", "Pol": "VG", "Sym": "VG", "FL": "NON", "Disc%": 62, "Price/ct": 722, "Amt $": 512.62, "Rap": 1900, "Rap Value": 1349, "Length": 5.5, "Width": 5.55, "Height": 3.56, "Depth%": 64.3, "Tab %": 59, "Link": null}, {"Range": 70, "Certificate": 260000095929, "Status": "B", "Shape": "ROUND", "Lab": "HRD", "Size": 0.71, "Color": "G", "Clarity": "SI2", "Cut": "VG", "Pol": "VG", "Sym": "VG", "FL": "NON", "Disc%": 62, "Price/ct": 646, "Amt $": 458.66, "Rap": 1700, "Rap Value": 1207, "Length": 5.54, "Width": 5.58, "Height": 3.51, "Depth%": 62.9, "Tab %": 62, "Link": null}, {"Range": 70, "Certificate": 260000095581, "Status": "B", "Shape": "ROUND", "Lab": "HRD", "Size": 0.71, "Color": "E", "Clarity": "SI2", "Cut": "GD", "Pol": "EX", "Sym": "VG", "FL": "NON", "Disc%": 64, "Price/ct": 756, "Amt $": 537.52, "Rap": 2100, "Rap Value": 1493.1, "Length": 5.51, "Width": 5.53, "Height": 3.64, "Depth%": 66, "Tab %": 57.0, "Link": null}, {"Range": 70, "Certificate": 260000095609, "Status": "B", "Shape": "ROUND", "Lab": "HRD", "Size": 0.71, "Color": "E", "Clarity": "SI2", "Cut": "VG", "Pol": "VG", "Sym": "VG", "FL": "NON", "Disc%": 62, "Price/ct": 798, "Amt $": 567.38, "Rap": 2100, "Rap Value": 1493.1, "Length": 5.54, "Width": 5.6, "Height": 3.58, "Depth%": 64.3, "Tab %": 55.0, "Link": null}, {"Range": 70, "Certificate": 260000096412, "Status": "B", "Shape": "ROUND", "Lab": "HRD", "Size": 0.71, "Color": "D", "Clarity": "SI2", "Cut": "VG", "Pol": "VG", "Sym": "VG", "FL": "SLT", "Disc%": 64, "Price/ct": 828, "Amt $": 589.54, "Rap": 2300, "Rap Value": 1637.6, "Length": 5.52, "Width": 5.58, "Height": 3.59, "Depth%": 64.5, "Tab %": 55.0, "Link": null}, {"Range": 70, "Certificate": 260000095622, "Status": "B", "Shape": "ROUND", "Lab": "HRD", "Size": 0.71, "Color": "E", "Clarity": "SI2", "Cut": "EX", "Pol": "VG", "Sym": "VG", "FL": "NON", "Disc%": 58, "Price/ct": 882, "Amt $": 627.98, "Rap": 2100, "Rap Value": 1495.2, "Length": 5.73, "Width": 5.77, "Height": 3.46, "Depth%": 60.1, "Tab %": 60, "Link": null}, {"Range": 70, "Certificate": 260000095628, "Status": "B", "Shape": "ROUND", "Lab": "HRD", "Size": 0.71, "Color": "E", "Clarity": "SI2", "Cut": "VG", "Pol": "VG", "Sym": "VG", "FL": "NON", "Disc%": 62, "Price/ct": 798, "Amt $": 568.18, "Rap": 2100, "Rap Value": 1495.2, "Length": 5.74, "Width": 5.77, "Height": 3.42, "Depth%": 59.4, "Tab %": 63, "Link": null}, {"Range": 70, "Certificate": 260000095642, "Status": "B", "Shape": "ROUND", "Lab": "HRD", "Size": 0.71, "Color": "E", "Clarity": "SI2", "Cut": "VG", "Pol": "VG", "Sym": "VG", "FL": "STG", "Disc%": 68, "Price/ct": 672, "Amt $": 478.46, "Rap": 2100, "Rap Value": 1495.2, "Length": 5.57, "Width": 5.61, "Height": 3.51, "Depth%": 62.7, "Tab %": 62, "Link": null}, {"Range": 70, "Certificate": 260000095926, "Status": "B", "Shape": "ROUND", "Lab": "HRD", "Size": 0.71, "Color": "F", "Clarity": "SI2", "Cut": "VG", "Pol": "VG", "Sym": "VG", "FL": "NON", "Disc%": 62, "Price/ct": 722, "Amt $": 514.06, "Rap": 1900, "Rap Value": 1352.8, "Length": 5.7, "Width": 5.74, "Height": 3.48, "Depth%": 60.8, "Tab %": 60, "Link": null}, {"Range": 70, "Certificate": 260000095592, "Status": "B", "Shape": "ROUND", "Lab": "HRD", "Size": 0.71, "Color": "E", "Clarity": "SI2", "Cut": "GD", "Pol": "VG", "Sym": "VG", "FL": "NON", "Disc%": 64, "Price/ct": 756, "Amt $": 539.03, "Rap": 2100, "Rap Value": 1497.3, "Length": 5.42, "Width": 5.47, "Height": 3.63, "Depth%": 66.5, "Tab %": 57.0, "Link": null}, {"Range": 70, "Certificate": 260000095935, "Status": "B", "Shape": "ROUND", "Lab": "HRD", "Size": 0.71, "Color": "F", "Clarity": "SI2", "Cut": "VG", "Pol": "VG", "Sym": "VG", "FL": "NON", "Disc%": 62, "Price/ct": 722, "Amt $": 514.79, "Rap": 1900, "Rap Value": 1354.7, "Length": 5.51, "Width": 5.55, "Height": 3.59, "Depth%": 64.9, "Tab %": 62, "Link": null}, {"Range": 70, "Certificate": 260000095959, "Status": "B", "Shape": "ROUND", "Lab": "HRD", "Size": 0.71, "Color": "D", "Clarity": "SI2", "Cut": "VG", "Pol": "EX", "Sym": "VG", "FL": "NON", "Disc%": 62, "Price/ct": 874, "Amt $": 623.16, "Rap": 2300, "Rap Value": 1639.9, "Length": 5.62, "Width": 5.67, "Height": 3.5, "Depth%": 61.9, "Tab %": 64, "Link": null}, {"Range": 70, "Certificate": 260000096408, "Status": "B", "Shape": "ROUND", "Lab": "HRD", "Size": 0.71, "Color": "E", "Clarity": "SI2", "Cut": "VG", "Pol": "VG", "Sym": "VG", "FL": "MED", "Disc%": 66, "Price/ct": 714, "Amt $": 509.8, "Rap": 2100, "Rap Value": 1499.4, "Length": 5.66, "Width": 5.7, "Height": 3.42, "Depth%": 60.2, "Tab %": 64, "Link": null}, {"Range": 70, "Certificate": 260000095956, "Status": "B", "Shape": "ROUND", "Lab": "HRD", "Size": 0.71, "Color": "E", "Clarity": "SI1", "Cut": "GD", "Pol": "EX", "Sym": "VG", "FL": "NON", "Disc%": 64, "Price/ct": 864, "Amt $": 617.76, "Rap": 2400, "Rap Value": 1716, "Length": 5.48, "Width": 5.55, "Height": 3.62, "Depth%": 65.6, "Tab %": 55.0, "Link": null}, {"Range": 70, "Certificate": 260000095637, "Status": "B", "Shape": "ROUND", "Lab": "HRD", "Size": 0.72, "Color": "F", "Clarity": "SI1", "Cut": "VG", "Pol": "EX", "Sym": "VG", "FL": "NON", "Disc%": 62, "Price/ct": 836, "Amt $": 599.41, "Rap": 2200, "Rap Value": 1577.4, "Length": 5.6, "Width": 5.65, "Height": 3.49, "Depth%": 61.9, "Tab %": 62, "Link": null}, {"Range": 70, "Certificate": 260000095471, "Status": "B", "Shape": "ROUND", "Lab": "HRD", "Size": 0.72, "Color": "D", "Clarity": "SI2", "Cut": "GD", "Pol": "VG", "Sym": "GD", "FL": "NON", "Disc%": 64, "Price/ct": 828, "Amt $": 594.5, "Rap": 2300, "Rap Value": 1651.4, "Length": 5.54, "Width": 5.57, "Height": 3.59, "Depth%": 64.5, "Tab %": 63, "Link": null}, {"Range": 70, "Certificate": 260000095591, "Status": "B", "Shape": "ROUND", "Lab": "HRD", "Size": 0.72, "Color": "G", "Clarity": "SI2", "Cut": "EX", "Pol": "VG", "Sym": "VG", "FL": "MED", "Disc%": 62, "Price/ct": 646, "Amt $": 463.83, "Rap": 1700, "Rap Value": 1220.6, "Length": 5.64, "Width": 5.68, "Height": 3.56, "Depth%": 62.8, "Tab %": 60, "Link": null}, {"Range": 70, "Certificate": 260000095613, "Status": "B", "Shape": "ROUND", "Lab": "HRD", "Size": 0.72, "Color": "D", "Clarity": "SI2", "Cut": "VG", "Pol": "VG", "Sym": "VG", "FL": "NON", "Disc%": 62, "Price/ct": 874, "Amt $": 628.41, "Rap": 2300, "Rap Value": 1653.7, "Length": 5.71, "Width": 5.76, "Height": 3.5, "Depth%": 60.9, "Tab %": 64, "Link": null}, {"Range": 70, "Certificate": 260000095487, "Status": "B", "Shape": "ROUND", "Lab": "HRD", "Size": 0.72, "Color": "F", "Clarity": "SI2", "Cut": "VG", "Pol": "VG", "Sym": "VG", "FL": "NON", "Disc%": 62, "Price/ct": 722, "Amt $": 519.84, "Rap": 1900, "Rap Value": 1368, "Length": 5.79, "Width": 5.85, "Height": 3.44, "Depth%": 59, "Tab %": 64, "Link": null}, {"Range": 70, "Certificate": 260000095587, "Status": "B", "Shape": "ROUND", "Lab": "HRD", "Size": 0.73, "Color": "F", "Clarity": "SI2", "Cut": "VG", "Pol": "VG", "Sym": "VG", "FL": "NON", "Disc%": 62, "Price/ct": 722, "Amt $": 524.17, "Rap": 1900, "Rap Value": 1379.4, "Length": 5.69, "Width": 5.75, "Height": 3.44, "Depth%": 60.2, "Tab %": 64, "Link": null}, {"Range": 70, "Certificate": 260000095590, "Status": "B", "Shape": "ROUND", "Lab": "HRD", "Size": 0.73, "Color": "D", "Clarity": "SI2", "Cut": "VG", "Pol": "VG", "Sym": "VG", "FL": "NON", "Disc%": 62, "Price/ct": 874, "Amt $": 641.52, "Rap": 2300, "Rap Value": 1688.2, "Length": 5.6, "Width": 5.65, "Height": 3.64, "Depth%": 64.7, "Tab %": 59, "Link": null}, {"Range": 70, "Certificate": 260000095952, "Status": "B", "Shape": "ROUND", "Lab": "HRD", "Size": 0.73, "Color": "F", "Clarity": "SI2", "Cut": "GD", "Pol": "EX", "Sym": "VG", "FL": "MED", "Disc%": 68, "Price/ct": 608, "Amt $": 446.88, "Rap": 1900, "Rap Value": 1396.5, "Length": 5.53, "Width": 5.59, "Height": 3.67, "Depth%": 66, "Tab %": 61, "Link": null}, {"Range": 70, "Certificate": 260000096406, "Status": "B", "Shape": "ROUND", "Lab": "HRD", "Size": 0.74, "Color": "F", "Clarity": "SI2", "Cut": "GD", "Pol": "VG", "Sym": "VG", "FL": "SLT", "Disc%": 66, "Price/ct": 646, "Amt $": 475.46, "Rap": 1900, "Rap Value": 1398.4, "Length": 5.57, "Width": 5.63, "Height": 3.65, "Depth%": 65.1, "Tab %": 54, "Link": null}, {"Range": 70, "Certificate": 260000095473, "Status": "B", "Shape": "ROUND", "Lab": "HRD", "Size": 0.74, "Color": "G", "Clarity": "SI2", "Cut": "GD", "Pol": "VG", "Sym": "VG", "FL": "NON", "Disc%": 64, "Price/ct": 612, "Amt $": 450.43, "Rap": 1700, "Rap Value": 1251.2, "Length": 5.56, "Width": 5.6, "Height": 3.66, "Depth%": 65.6, "Tab %": 61, "Link": null}, {"Range": 70, "Certificate": 260000096400, "Status": "B", "Shape": "ROUND", "Lab": "HRD", "Size": 0.74, "Color": "G", "Clarity": "SI2", "Cut": "GD", "Pol": "VG", "Sym": "VG", "FL": "MED", "Disc%": 68, "Price/ct": 544, "Amt $": 400.93, "Rap": 1700, "Rap Value": 1252.9, "Length": 5.53, "Width": 5.59, "Height": 3.67, "Depth%": 65.9, "Tab %": 56.0, "Link": null}, {"Range": 70, "Certificate": 260000096414, "Status": "B", "Shape": "ROUND", "Lab": "HRD", "Size": 0.74, "Color": "F", "Clarity": "SI1", "Cut": "VG", "Pol": "VG", "Sym": "VG", "FL": "NON", "Disc%": 62, "Price/ct": 836, "Amt $": 620.31, "Rap": 2200, "Rap Value": 1632.4, "Length": 5.62, "Width": 5.66, "Height": 3.61, "Depth%": 64.1, "Tab %": 62, "Link": null}, {"Range": 70, "Certificate": 260000095583, "Status": "B", "Shape": "ROUND", "Lab": "HRD", "Size": 0.75, "Color": "F", "Clarity": "SI2", "Cut": "GD", "Pol": "VG", "Sym": "VG", "FL": "SLT", "Disc%": 64, "Price/ct": 684, "Amt $": 511.63, "Rap": 1900, "Rap Value": 1421.2, "Length": 5.57, "Width": 5.62, "Height": 3.7, "Depth%": 66.1, "Tab %": 55.0, "Link": null}, {"Range": 70, "Certificate": 260000095949, "Status": "B", "Shape": "ROUND", "Lab": "HRD", "Size": 0.75, "Color": "D", "Clarity": "SI1", "Cut": "VG", "Pol": "VG", "Sym": "VG", "FL": "SLT", "Disc%": 62, "Price/ct": 988, "Amt $": 744.95, "Rap": 2600, "Rap Value": 1960.4, "Length": 5.7, "Width": 5.74, "Height": 3.66, "Depth%": 64, "Tab %": 59, "Link": null}, {"Range": 70, "Certificate": 260000095923, "Status": "B", "Shape": "ROUND", "Lab": "HRD", "Size": 0.76, "Color": "F", "Clarity": "SI2", "Cut": "VG", "Pol": "EX", "Sym": "EX", "FL": "NON", "Disc%": 60, "Price/ct": 760, "Amt $": 574.56, "Rap": 1900, "Rap Value": 1436.4, "Length": 5.69, "Width": 5.74, "Height": 3.64, "Depth%": 63.8, "Tab %": 59, "Link": null}, {"Range": 70, "Certificate": 260000096716, "Status": "B", "Shape": "ROUND", "Lab": "HRD", "Size": 0.76, "Color": "F", "Clarity": "SI2", "Cut": "GD", "Pol": "EX", "Sym": "VG", "FL": "MED", "Disc%": 66, "Price/ct": 646, "Amt $": 489.67, "Rap": 1900, "Rap Value": 1440.2, "Length": 5.63, "Width": 5.68, "Height": 3.72, "Depth%": 65.9, "Tab %": 57.0, "Link": null}, {"Range": 70, "Certificate": 260000096731, "Status": "B", "Shape": "ROUND", "Lab": "HRD", "Size": 0.76, "Color": "E", "Clarity": "SI2", "Cut": "VG", "Pol": "EX", "Sym": "VG", "FL": "NON", "Disc%": 60, "Price/ct": 840, "Amt $": 639.24, "Rap": 2100, "Rap Value": 1598.1, "Length": 5.77, "Width": 5.79, "Height": 3.52, "Depth%": 60.9, "Tab %": 65, "Link": null}, {"Range": 70, "Certificate": 260000096409, "Status": "B", "Shape": "ROUND", "Lab": "HRD", "Size": 0.77, "Color": "F", "Clarity": "SI1", "Cut": "VG", "Pol": "EX", "Sym": "VG", "FL": "NON", "Disc%": 60, "Price/ct": 880, "Amt $": 673.2, "Rap": 2200, "Rap Value": 1683, "Length": 5.76, "Width": 5.8, "Height": 3.56, "Depth%": 61.5, "Tab %": 58.0, "Link": null}, {"Range": 70, "Certificate": 260000095476, "Status": "B", "Shape": "ROUND", "Lab": "HRD", "Size": 0.77, "Color": "E", "Clarity": "SI1", "Cut": "GD", "Pol": "EX", "Sym": "VG", "FL": "NON", "Disc%": 62, "Price/ct": 912, "Amt $": 705.89, "Rap": 2400, "Rap Value": 1857.6, "Length": 5.62, "Width": 5.68, "Height": 3.71, "Depth%": 65.5, "Tab %": 61, "Link": null}, {"Range": 70, "Certificate": 260000095480, "Status": "B", "Shape": "ROUND", "Lab": "HRD", "Size": 0.78, "Color": "E", "Clarity": "SI2", "Cut": "VG", "Pol": "VG", "Sym": "VG", "FL": "SLT", "Disc%": 61, "Price/ct": 819, "Amt $": 634.73, "Rap": 2100, "Rap Value": 1627.5, "Length": 5.96, "Width": 5.99, "Height": 3.55, "Depth%": 59.5, "Tab %": 64, "Link": null}, {"Range": 70, "Certificate": 260000095944, "Status": "B", "Shape": "ROUND", "Lab": "HRD", "Size": 0.78, "Color": "F", "Clarity": "SI1", "Cut": "GD", "Pol": "VG", "Sym": "VG", "FL": "SLT", "Disc%": 63, "Price/ct": 814, "Amt $": 633.29, "Rap": 2200, "Rap Value": 1711.6, "Length": 5.65, "Width": 5.69, "Height": 3.75, "Depth%": 66, "Tab %": 59, "Link": null}, {"Range": 70, "Certificate": 260000095932, "Status": "B", "Shape": "ROUND", "Lab": "HRD", "Size": 0.78, "Color": "E", "Clarity": "SI2", "Cut": "VG", "Pol": "VG", "Sym": "VG", "FL": "MED", "Disc%": 63, "Price/ct": 777, "Amt $": 605.28, "Rap": 2100, "Rap Value": 1635.9, "Length": 5.77, "Width": 5.85, "Height": 3.67, "Depth%": 63.1, "Tab %": 58.0, "Link": null}, {"Range": 70, "Certificate": 260000095950, "Status": "B", "Shape": "ROUND", "Lab": "HRD", "Size": 0.78, "Color": "E", "Clarity": "SI2", "Cut": "VG", "Pol": "VG", "Sym": "EX", "FL": "NON", "Disc%": 59, "Price/ct": 861, "Amt $": 675.02, "Rap": 2100, "Rap Value": 1646.4, "Length": 5.88, "Width": 5.92, "Height": 3.59, "Depth%": 60.9, "Tab %": 60, "Link": null}, {"Range": 70, "Certificate": 260000095934, "Status": "B", "Shape": "ROUND", "Lab": "HRD", "Size": 0.79, "Color": "E", "Clarity": "SI2", "Cut": "VG", "Pol": "VG", "Sym": "VG", "FL": "SLT", "Disc%": 59, "Price/ct": 861, "Amt $": 678.47, "Rap": 2100, "Rap Value": 1654.8, "Length": 5.74, "Width": 5.79, "Height": 3.69, "Depth%": 63.9, "Tab %": 58.0, "Link": null}, {"Range": 70, "Certificate": 260000095927, "Status": "B", "Shape": "ROUND", "Lab": "HRD", "Size": 0.79, "Color": "F", "Clarity": "SI2", "Cut": "VG", "Pol": "VG", "Sym": "EX", "FL": "MED", "Disc%": 61, "Price/ct": 741, "Amt $": 586.13, "Rap": 1900, "Rap Value": 1502.9, "Length": 5.77, "Width": 5.82, "Height": 3.64, "Depth%": 62.9, "Tab %": 59, "Link": null}, {"Range": 70, "Certificate": 260000096724, "Status": "B", "Shape": "ROUND", "Lab": "HRD", "Size": 0.8, "Color": "F", "Clarity": "SI2", "Cut": "VG", "Pol": "VG", "Sym": "VG", "FL": "NON", "Disc%": 58, "Price/ct": 798, "Amt $": 638.4, "Rap": 1900, "Rap Value": 1520, "Length": 5.76, "Width": 5.81, "Height": 3.74, "Depth%": 64.5, "Tab %": 59, "Link": null}, {"Range": 70, "Certificate": 260000095604, "Status": "B", "Shape": "ROUND", "Lab": "HRD", "Size": 0.8, "Color": "F", "Clarity": "SI2", "Cut": "VG", "Pol": "VG", "Sym": "VG", "FL": "SLT", "Disc%": 61, "Price/ct": 741, "Amt $": 594.28, "Rap": 1900, "Rap Value": 1523.8, "Length": 5.74, "Width": 5.79, "Height": 3.73, "Depth%": 64.8, "Tab %": 63, "Link": null}, {"Range": 70, "Certificate": 260000095957, "Status": "B", "Shape": "ROUND", "Lab": "HRD", "Size": 0.81, "Color": "G", "Clarity": "SI2", "Cut": "VG", "Pol": "EX", "Sym": "EX", "FL": "NON", "Disc%": 58, "Price/ct": 714, "Amt $": 579.05, "Rap": 1700, "Rap Value": 1378.7, "Length": 5.82, "Width": 5.86, "Height": 3.75, "Depth%": 64.3, "Tab %": 60, "Link": null}, {"Range": 70, "Certificate": 260000095947, "Status": "M", "Shape": "ROUND", "Lab": "HRD", "Size": 0.81, "Color": "E", "Clarity": "SI2", "Cut": "VG", "Pol": "VG", "Sym": "VG", "FL": "NON", "Disc%": 57, "Price/ct": 903, "Amt $": 735.04, "Rap": 2100, "Rap Value": 1709.4, "Length": 5.93, "Width": 5.99, "Height": 3.63, "Depth%": 60.8, "Tab %": 61, "Link": null}, {"Range": 70, "Certificate": 260000096423, "Status": "M", "Shape": "ROUND", "Lab": "HRD", "Size": 0.81, "Color": "G", "Clarity": "SI2", "Cut": "VG", "Pol": "VG", "Sym": "VG", "FL": "NON", "Disc%": 58, "Price/ct": 714, "Amt $": 581.91, "Rap": 1700, "Rap Value": 1385.5, "Length": 5.78, "Width": 5.81, "Height": 3.72, "Depth%": 64.3, "Tab %": 57.0, "Link": null}, {"Range": 70, "Certificate": 260000095955, "Status": "M", "Shape": "ROUND", "Lab": "HRD", "Size": 0.82, "Color": "E", "Clarity": "SI2", "Cut": "VG", "Pol": "VG", "Sym": "VG", "FL": "MED", "Disc%": 63, "Price/ct": 777, "Amt $": 634.81, "Rap": 2100, "Rap Value": 1715.7, "Length": 5.84, "Width": 5.9, "Height": 3.73, "Depth%": 63.5, "Tab %": 57.0, "Link": null}, {"Range": 70, "Certificate": 260000095484, "Status": "M", "Shape": "ROUND", "Lab": "HRD", "Size": 0.83, "Color": "F", "Clarity": "SI2", "Cut": "GD", "Pol": "VG", "Sym": "VG", "FL": "NON", "Disc%": 59, "Price/ct": 779, "Amt $": 643.45, "Rap": 1900, "Rap Value": 1569.4, "Length": 5.79, "Width": 5.83, "Height": 3.84, "Depth%": 66, "Tab %": 59, "Link": null}, {"Range": 70, "Certificate": 260000095490, "Status": "M", "Shape": "ROUND", "Lab": "HRD", "Size": 0.84, "Color": "G", "Clarity": "SI2", "Cut": "VG", "Pol": "VG", "Sym": "VG", "FL": "SLT", "Disc%": 62, "Price/ct": 646, "Amt $": 540.7, "Rap": 1700, "Rap Value": 1422.9, "Length": 6.03, "Width": 6.09, "Height": 3.69, "Depth%": 60.8, "Tab %": 63, "Link": null}, {"Range": 70, "Certificate": 260000095597, "Status": "M", "Shape": "ROUND", "Lab": "HRD", "Size": 0.86, "Color": "E", "Clarity": "SI2", "Cut": "GD", "Pol": "VG", "Sym": "VG", "FL": "MED", "Disc%": 64, "Price/ct": 756, "Amt $": 648.65, "Rap": 2100, "Rap Value": 1801.8, "Length": 5.85, "Width": 5.89, "Height": 3.89, "Depth%": 66.2, "Tab %": 56.0, "Link": null}, {"Range": 70, "Certificate": 260000096410, "Status": "M", "Shape": "ROUND", "Lab": "HRD", "Size": 0.89, "Color": "E", "Clarity": "SI2", "Cut": "VG", "Pol": "VG", "Sym": "EX", "FL": "NON", "Disc%": 58, "Price/ct": 882, "Amt $": 782.33, "Rap": 2100, "Rap Value": 1862.7, "Length": 5.95, "Width": 5.99, "Height": 3.88, "Depth%": 65, "Tab %": 61, "Link": null}, {"Range": 100, "Certificate": 5553103156, "Status": "M", "Shape": "OVAL", "Lab": "GIA", "Size": 1.01, "Color": "F", "Clarity": "SI2", "Cut": null, "Pol": "EX", "Sym": "EX", "FL": "FNT", "Disc%": null, "Price/ct": null, "Amt $": null, "Rap": 3500, "Rap Value": 3535, "Length": 7.85, "Width": 5.57, "Height": 3.54, "Depth%": 63.6, "Tab %": 61, "Link": "https://assets.mydiamonds.info/video/1268A6-10?u=qfKJ6XqzHddhkusing2017FlgmypeHRpmLstJWJPHeMlrV7DwQpeQUC2cTiIOgBcxQGHRiPp1U0X"}, {"Range": 100, "Certificate": 260000076209, "Status": "M", "Shape": "OVAL", "Lab": "HRD", "Size": 1.01, "Color": "G", "Clarity": "SI2", "Cut": null, "Pol": "EX", "Sym": "EX", "FL": "NON", "Disc%": null, "Price/ct": null, "Amt $": null, "Rap": 3300, "Rap Value": 3333, "Length": 7.96, "Width": 5.69, "Height": 3.42, "Depth%": 60.1, "Tab %": 62, "Link": "https://assets.mydiamonds.info/video/1261A6-20?u=qfKJ6XqzHddhkusing2017FlgmypeHRpmLstJWJPHeMlrV7DwQpeQUC2cTiIOgBcxQGHRiPp1U0X"}, {"Range": 100, "Certificate": 260000096949, "Status": "M", "Shape": "OVAL", "Lab": "HRD", "Size": 1.01, "Color": "D", "Clarity": "SI2", "Cut": null, "Pol": "VG", "Sym": "VG", "FL": "NON", "Disc%": null, "Price/ct": null, "Amt $": null, "Rap": 3900, "Rap Value": 3939, "Length": 7.51, "Width": 5.54, "Height": 3.67, "Depth%": 66.2, "Tab %": 62, "Link": "https://ds-360.jaykar.co.in/ds_360.php?chk=QWxs&q=SllLNEYyNjY0Ng=="}, {"Range": 100, "Certificate": 260000096952, "Status": "M", "Shape": "OVAL", "Lab": "HRD", "Size": 1.01, "Color": "G", "Clarity": "SI2", "Cut": null, "Pol": "VG", "Sym": "GD", "FL": "SLT", "Disc%": null, "Price/ct": null, "Amt $": null, "Rap": 3300, "Rap Value": 3333, "Length": 7.88, "Width": 5.54, "Height": 3.51, "Depth%": 63.4, "Tab %": 63, "Link": "https://ds-360.jaykar.co.in/ds_360.php?chk=QWxs&q=SllLNEYyNjY0Nw=="}, {"Range": 100, "Certificate": 260000106454, "Status": "M", "Shape": "OVAL", "Lab": "HRD", "Size": 1.01, "Color": "D", "Clarity": "SI2", "Cut": null, "Pol": "EX", "Sym": "VG", "FL": "NON", "Disc%": null, "Price/ct": null, "Amt $": null, "Rap": 3900, "Rap Value": 3939, "Length": 7.96, "Width": 5.26, "Height": 3.42, "Depth%": 65, "Tab %": 59, "Link": "https://ds-360.jaykar.co.in/ds_360.php?chk=QWxs&q=SllLNEYyNjY1MA=="}, {"Range": 100, "Certificate": 260000106460, "Status": "M", "Shape": "OVAL", "Lab": "HRD", "Size": 1.01, "Color": "G", "Clarity": "SI2", "Cut": null, "Pol": "EX", "Sym": "EX", "FL": "NON", "Disc%": null, "Price/ct": null, "Amt $": null, "Rap": 3300, "Rap Value": 3333, "Length": 8.01, "Width": 5.56, "Height": 3.48, "Depth%": 62.6, "Tab %": 62, "Link": "https://ds-360.jaykar.co.in/ds_360.php?chk=QWxs&q=SllLNEYyNjY0Mw=="}, {"Range": 100, "Certificate": 2558251351, "Status": "M", "Shape": "OVAL", "Lab": "GIA", "Size": 1.01, "Color": "E", "Clarity": "SI2", "Cut": null, "Pol": "EX", "Sym": "VG", "FL": "NON", "Disc%": null, "Price/ct": null, "Amt $": null, "Rap": 3700, "Rap Value": 3737, "Length": 7.59, "Width": 5.47, "Height": 3.63, "Depth%": 66.4, "Tab %": 53, "Link": "https://storageweweb.blob.core.windows.net/files/INVENTORYDATA/V360Mini5/Vision360.html?d=260041845"}, {"Range": 100, "Certificate": 260000106659, "Status": "M", "Shape": "OVAL", "Lab": "HRD", "Size": 1.02, "Color": "F", "Clarity": "SI2", "Cut": "", "Pol": "EX", "Sym": "VG", "FL": "MED", "Disc%": null, "Price/ct": null, "Amt $": null, "Rap": 3500, "Rap Value": 3570, "Length": 7.67, "Width": 5.38, "Height": 3.62, "Depth%": 67.3, "Tab %": 59, "Link": "https://video.diamlist.com/VideoPage.aspx?stoneid=TN4003206"}, {"Range": 100, "Certificate": 260000096950, "Status": "M", "Shape": "OVAL", "Lab": "HRD", "Size": 1.03, "Color": "E", "Clarity": "SI2", "Cut": null, "Pol": "VG", "Sym": "VG", "FL": "NON", "Disc%": null, "Price/ct": null, "Amt $": null, "Rap": 3700, "Rap Value": 3811, "Length": 8.03, "Width": 5.75, "Height": 3.62, "Depth%": 63, "Tab %": 61, "Link": "https://ds-360.jaykar.co.in/ds_360.php?chk=QWxs&q=SllLNEYyNjY0NQ=="}, {"Range": 100, "Certificate": 260000098996, "Status": "M", "Shape": "OVAL", "Lab": "HRD", "Size": 1.03, "Color": "D", "Clarity": "SI2", "Cut": null, "Pol": "VG", "Sym": "VG", "FL": "MED", "Disc%": null, "Price/ct": null, "Amt $": null, "Rap": 3900, "Rap Value": 4017, "Length": 7.59, "Width": 5.53, "Height": 3.58, "Depth%": 64.7, "Tab %": 61, "Link": "https://ds-360.jaykar.co.in/ds_360.php?chk=QWxs&q=SllLNEYyNjY0OQ=="}, {"Range": 100, "Certificate": 260000106452, "Status": "M", "Shape": "OVAL", "Lab": "HRD", "Size": 1.03, "Color": "G", "Clarity": "SI2", "Cut": null, "Pol": "VG", "Sym": "VG", "FL": "NON", "Disc%": null, "Price/ct": null, "Amt $": null, "Rap": 3300, "Rap Value": 3399, "Length": 8.56, "Width": 5.43, "Height": 3.38, "Depth%": 62.2, "Tab %": 54, "Link": "https://ds-360.jaykar.co.in/ds_360.php?chk=QWxs&q=SllLNEYyNjY0NA=="}, {"Range": 100, "Certificate": 7536507353, "Status": "M", "Shape": "OVAL", "Lab": "GIA", "Size": 1.14, "Color": "G", "Clarity": "SI2", "Cut": null, "Pol": "EX", "Sym": "EX", "FL": "FNT", "Disc%": null, "Price/ct": null, "Amt $": null, "Rap": 3300, "Rap Value": 3762.0, "Length": 8.48, "Width": 5.84, "Height": 3.61, "Depth%": 61.7, "Tab %": 63, "Link": "https://d1s5m21q2l18ke.cloudfront.net/grey_mov_video/h7kc7oij224.MP4?MTIxMjI="}, {"Range": 120, "Certificate": 260000074162, "Status": "M", "Shape": "OVAL", "Lab": "HRD", "Size": 1.2, "Color": "D", "Clarity": "SI2", "Cut": null, "Pol": "EX", "Sym": "VG", "FL": "NON", "Disc%": null, "Price/ct": null, "Amt $": null, "Rap": 3900, "Rap Value": 4680, "Length": 8.18, "Width": 5.96, "Height": 3.69, "Depth%": 61.9, "Tab %": 65, "Link": "https://assets.mydiamonds.info/video/XB56-100?u=qfKJ6XqzHddhkusing2017FlgmypeHRpmLstJWJPHeMlrV7DwQpeQUC2cTiIOgBcxQGHRiPp1U0X"}, {"Range": 150, "Certificate": 260000093906, "Status": "M", "Shape": "OVAL", "Lab": "HRD", "Size": 1.5, "Color": "F", "Clarity": "SI2", "Cut": null, "Pol": "VG", "Sym": "VG", "FL": "NON", "Disc%": null, "Price/ct": null, "Amt $": null, "Rap": 6000, "Rap Value": 9000, "Length": 8.81, "Width": 6.33, "Height": 4.09, "Depth%": 64.6, "Tab %": 61, "Link": "https://ds-360.jaykar.co.in/ds_360.php?chk=QWxs&q=SllLOEUyNjk3Nw=="}, {"Range": 150, "Certificate": 260000011584, "Status": "M", "Shape": "OVAL", "Lab": "HRD", "Size": 1.51, "Color": "F", "Clarity": "SI2", "Cut": "", "Pol": "EX", "Sym": "VG", "FL": "NON", "Disc%": null, "Price/ct": null, "Amt $": null, "Rap": 6000, "Rap Value": 9060, "Length": 8.64, "Width": 6.46, "Height": 4.26, "Depth%": 65.9, "Tab %": 56, "Link": "https://video.diamlist.com/VideoPage.aspx?stoneid=TN0112836"}, {"Range": 150, "Certificate": 260000096953, "Status": "M", "Shape": "OVAL", "Lab": "HRD", "Size": 1.52, "Color": "D", "Clarity": "SI2", "Cut": null, "Pol": "VG", "Sym": "VG", "FL": "NON", "Disc%": null, "Price/ct": null, "Amt $": null, "Rap": 6700, "Rap Value": 10184, "Length": 8.79, "Width": 6.45, "Height": 4.03, "Depth%": 62.5, "Tab %": 63, "Link": "https://ds-360.jaykar.co.in/ds_360.php?chk=QWxs&q=SllLNEYyNjY1MQ=="}, {"Range": 200, "Certificate": 260000106461, "Status": "M", "Shape": "OVAL", "Lab": "HRD", "Size": 2.01, "Color": "F", "Clarity": "SI2", "Cut": null, "Pol": "VG", "Sym": "VG", "FL": "MED", "Disc%": 67, "Price/ct": 3003, "Amt $": 6036.03, "Rap": 9100, "Rap Value": 18291.0, "Length": 9.42, "Width": 6.67, "Height": 4.74, "Depth%": 71.1, "Tab %": 62, "Link": "https://ds-360.jaykar.co.in/ds_360.php?chk=QWxs&q=SllLNEYyNjY0OA=="}, {"Range": 100, "Certificate": 2537734446, "Status": "M", "Shape": "PEAR", "Lab": "GIA", "Size": 1.01, "Color": "D", "Clarity": "SI2", "Cut": null, "Pol": "EX", "Sym": "EX", "FL": "FNT", "Disc%": 60, "Price/ct": 1560, "Amt $": 1575.6, "Rap": 3900, "Rap Value": 3939, "Length": 8.22, "Width": 5.44, "Height": 3.57, "Depth%": 65.7, "Tab %": 62, "Link": null}, {"Range": 100, "Certificate": 2546639496, "Status": "M", "Shape": "PEAR", "Lab": "GIA", "Size": 1.01, "Color": "E", "Clarity": "SI2", "Cut": null, "Pol": "EX", "Sym": "EX", "FL": "FNT", "Disc%": 60, "Price/ct": 1480, "Amt $": 1494.8, "Rap": 3700, "Rap Value": 3737, "Length": 8.34, "Width": 5.55, "Height": 3.54, "Depth%": 63.8, "Tab %": 55, "Link": null}, {"Range": 100, "Certificate": 260000008655, "Status": "M", "Shape": "PEAR", "Lab": "HRD", "Size": 1.01, "Color": "D", "Clarity": "SI2", "Cut": null, "Pol": "EX", "Sym": "VG", "FL": "MED", "Disc%": 62, "Price/ct": 1482, "Amt $": 1496.82, "Rap": 3900, "Rap Value": 3939, "Length": 9.03, "Width": 5.4, "Height": 3.48, "Depth%": 64.4, "Tab %": 56, "Link": null}, {"Range": 100, "Certificate": 260000106652, "Status": "M", "Shape": "ROUND", "Lab": "HRD", "Size": 1.01, "Color": "D", "Clarity": "SI2", "Cut": "GD", "Pol": "EX", "Sym": "VG", "FL": "NON", "Disc%": null, "Price/ct": null, "Amt $": null, "Rap": 3700, "Rap Value": 3737, "Length": 6.2, "Width": 6.07, "Height": 4.07, "Depth%": 66.1, "Tab %": 59, "Link": "https://video.diamlist.com/VideoPage.aspx?stoneid=TN0131769"}, {"Range": 100, "Certificate": 260000106646, "Status": "M", "Shape": "ROUND", "Lab": "HRD", "Size": 1.02, "Color": "F", "Clarity": "SI2", "Cut": "VG", "Pol": "VG", "Sym": "VG", "FL": "NON", "Disc%": null, "Price/ct": null, "Amt $": null, "Rap": 3200, "Rap Value": 3264, "Length": 6.31, "Width": 6.27, "Height": 4.02, "Depth%": 63.8, "Tab %": 56, "Link": "https://video.diamlist.com/VideoPage.aspx?stoneid=TN0131450"}, {"Range": 100, "Certificate": 260000101118, "Status": "M", "Shape": "ROUND", "Lab": "HRD", "Size": 1.03, "Color": "D", "Clarity": "SI2", "Cut": "EX", "Pol": "EX", "Sym": "EX", "FL": "NON", "Disc%": null, "Price/ct": null, "Amt $": null, "Rap": 3700, "Rap Value": 3811, "Length": 6.46, "Width": 6.42, "Height": 4.01, "Depth%": 62.3, "Tab %": 58, "Link": "https://video.diamlist.com/VideoPage.aspx?stoneid=TN0129963"}, {"Range": 120, "Certificate": 260000090718, "Status": "M", "Shape": "ROUND", "Lab": "HRD", "Size": 1.2, "Color": "F", "Clarity": "SI2", "Cut": "EX", "Pol": "EX", "Sym": "EX", "FL": "NON", "Disc%": null, "Price/ct": null, "Amt $": null, "Rap": 3200, "Rap Value": 3840, "Length": 6.74, "Width": 6.7, "Height": 4.22, "Depth%": 62.7, "Tab %": 57, "Link": null}, {"Range": 120, "Certificate": 260000090738, "Status": "M", "Shape": "ROUND", "Lab": "HRD", "Size": 1.2, "Color": "F", "Clarity": "SI2", "Cut": "VG", "Pol": "VG", "Sym": "VG", "FL": "NON", "Disc%": null, "Price/ct": null, "Amt $": null, "Rap": 3200, "Rap Value": 3840, "Length": 6.63, "Width": 6.57, "Height": 4.24, "Depth%": 64.1, "Tab %": 56, "Link": null}, {"Range": 120, "Certificate": 260000090745, "Status": "M", "Shape": "ROUND", "Lab": "HRD", "Size": 1.2, "Color": "G", "Clarity": "SI2", "Cut": "EX", "Pol": "EX", "Sym": "VG", "FL": "NON", "Disc%": null, "Price/ct": null, "Amt $": null, "Rap": 3000, "Rap Value": 3600, "Length": 6.74, "Width": 6.67, "Height": 4.22, "Depth%": 62.7, "Tab %": 59, "Link": null}, {"Range": 120, "Certificate": 260000096295, "Status": "M", "Shape": "ROUND", "Lab": "HRD", "Size": 1.22, "Color": "E", "Clarity": "SI2", "Cut": "VG", "Pol": "VG", "Sym": "VG", "FL": "NON", "Disc%": null, "Price/ct": null, "Amt $": null, "Rap": 3400, "Rap Value": 4148, "Length": 6.71, "Width": 6.62, "Height": 4.26, "Depth%": 63.7, "Tab %": 57, "Link": null}, {"Range": 130, "Certificate": 260000093905, "Status": "M", "Shape": "ROUND", "Lab": "HRD", "Size": 1.35, "Color": "E", "Clarity": "SI2", "Cut": "VG", "Pol": "EX", "Sym": "VG", "FL": "NON", "Disc%": null, "Price/ct": null, "Amt $": null, "Rap": 3400, "Rap Value": 4590, "Length": 6.88, "Width": 6.95, "Height": 4.43, "Depth%": 64, "Tab %": 55, "Link": "https://ds-360.jaykar.co.in/ds_360.php?chk=QWxs&q=SllLOEUyNjk3Ng=="}, {"Range": 150, "Certificate": 260000087887, "Status": "M", "Shape": "ROUND", "Lab": "HRD", "Size": 1.5, "Color": "G", "Clarity": "SI2", "Cut": "VG", "Pol": "EX", "Sym": "VG", "FL": "MED", "Disc%": 70, "Price/ct": 1710, "Amt $": 2565, "Rap": 5700, "Rap Value": 8550, "Length": 7.03, "Width": 7.11, "Height": 4.61, "Depth%": 65.1, "Tab %": 57, "Link": "https://ds-360.jaykar.co.in/ds_360.php?chk=QWxs&q=SllLMjhEMjYyMTM="}, {"Range": 150, "Certificate": 260000097700, "Status": "M", "Shape": "ROUND", "Lab": "HRD", "Size": 1.5, "Color": "F", "Clarity": "SI2", "Cut": "EX", "Pol": "EX", "Sym": "EX", "FL": "NON", "Disc%": null, "Price/ct": null, "Amt $": null, "Rap": 6100, "Rap Value": 9150, "Length": 7.27, "Width": 7.23, "Height": 4.55, "Depth%": 62.7, "Tab %": 58, "Link": null}, {"Range": 150, "Certificate": 260000036206, "Status": "M", "Shape": "ROUND", "Lab": "HRD", "Size": 1.51, "Color": "F", "Clarity": "SI2", "Cut": "VG", "Pol": "EX", "Sym": "VG", "FL": "MED", "Disc%": 70, "Price/ct": 1830, "Amt $": 2763.3, "Rap": 6100, "Rap Value": 9211, "Length": 7.09, "Width": 7.18, "Height": 4.6, "Depth%": 64.4, "Tab %": 56, "Link": null}, {"Range": 200, "Certificate": 260000095462, "Status": "M", "Shape": "ROUND", "Lab": "HRD", "Size": 1.96, "Color": "G", "Clarity": "SI2", "Cut": "EX", "Pol": "EX", "Sym": "VG", "FL": "NON", "Disc%": 55, "Price/ct": 2565, "Amt $": 5027.4, "Rap": 5700, "Rap Value": 11172, "Length": 7.89, "Width": 7.96, "Height": 4.92, "Depth%": 61.9, "Tab %": 61, "Link": null}, {"Range": 200, "Certificate": 260000095463, "Status": "M", "Shape": "ROUND", "Lab": "HRD", "Size": 2, "Color": "G", "Clarity": "SI2", "Cut": "VG", "Pol": "EX", "Sym": "EX", "FL": "NON", "Disc%": null, "Price/ct": null, "Amt $": null, "Rap": 9200, "Rap Value": 18400, "Length": 8.26, "Width": 8.29, "Height": 4.81, "Depth%": 58.1, "Tab %": 61, "Link": null}, {"Range": 200, "Certificate": 260000078608, "Status": "M", "Shape": "ROUND", "Lab": "HRD", "Size": 2.01, "Color": "G", "Clarity": "SI2", "Cut": "VG", "Pol": "EX", "Sym": "VG", "FL": "NON", "Disc%": null, "Price/ct": null, "Amt $": null, "Rap": 9200, "Rap Value": 18492.0, "Length": 8.02, "Width": 7.94, "Height": 5.09, "Depth%": 63.8, "Tab %": 55, "Link": "https://video.diamlist.com/VideoPage.aspx?stoneid=TN0119105"}, {"Range": 200, "Certificate": 260000099741, "Status": "M", "Shape": "ROUND", "Lab": "HRD", "Size": 2.01, "Color": "F", "Clarity": "SI2", "Cut": "GD", "Pol": "VG", "Sym": "VG", "FL": "NON", "Disc%": null, "Price/ct": null, "Amt $": null, "Rap": 9800, "Rap Value": 19698.0, "Length": 7.69, "Width": 7.63, "Height": 5.1, "Depth%": 66.6, "Tab %": 57, "Link": null}, {"Range": 200, "Certificate": 260000096954, "Status": "M", "Shape": "ROUND", "Lab": "HRD", "Size": 2.01, "Color": "D", "Clarity": "SI2", "Cut": "VG", "Pol": "EX", "Sym": "VG", "FL": "NON", "Disc%": null, "Price/ct": null, "Amt $": null, "Rap": 11300, "Rap Value": 22713.0, "Length": 7.8, "Width": 7.85, "Height": 5.06, "Depth%": 64.5, "Tab %": 57, "Link": "https://ds-360.jaykar.co.in/ds_360.php?chk=QWxs&q=SllLNEYyNjY0MQ=="}, {"Range": 200, "Certificate": 5543266847, "Status": "M", "Shape": "ROUND", "Lab": "GIA", "Size": 2.01, "Color": "G", "Clarity": "VS1", "Cut": "EX", "Pol": "EX", "Sym": "EX", "FL": "NON", "Disc%": null, "Price/ct": null, "Amt $": null, "Rap": 15000, "Rap Value": 30150.0, "Length": 8.02, "Width": 7.97, "Height": 5.02, "Depth%": 62.7, "Tab %": 57, "Link": "https://share.diamondselections.com/d"}, {"Range": 200, "Certificate": 260000095465, "Status": "M", "Shape": "ROUND", "Lab": "HRD", "Size": 2.02, "Color": "E", "Clarity": "SI2", "Cut": "VG", "Pol": "VG", "Sym": "VG", "FL": "NON", "Disc%": null, "Price/ct": null, "Amt $": null, "Rap": 10500, "Rap Value": 21210, "Length": 7.91, "Width": 7.96, "Height": 5.04, "Depth%": 63.5, "Tab %": 56, "Link": null}, {"Range": 200, "Certificate": 260000095458, "Status": "M", "Shape": "ROUND", "Lab": "HRD", "Size": 2.02, "Color": "H", "Clarity": "SI2", "Cut": "EX", "Pol": "EX", "Sym": "EX", "FL": "NON", "Disc%": null, "Price/ct": null, "Amt $": null, "Rap": 8600, "Rap Value": 17372, "Length": 8.09, "Width": 8.15, "Height": 4.96, "Depth%": 61.1, "Tab %": 59, "Link": null}, {"Range": 200, "Certificate": 260000091259, "Status": "M", "Shape": "ROUND", "Lab": "HRD", "Size": 2.03, "Color": "F", "Clarity": "SI2", "Cut": "VG", "Pol": "VG", "Sym": "VG", "FL": "MED", "Disc%": null, "Price/ct": null, "Amt $": null, "Rap": 9800, "Rap Value": 19894.0, "Length": 7.86, "Width": 7.81, "Height": 5.04, "Depth%": 64.3, "Tab %": 56, "Link": null}, {"Range": 200, "Certificate": 260000095461, "Status": "M", "Shape": "ROUND", "Lab": "HRD", "Size": 2.04, "Color": "G", "Clarity": "SI2", "Cut": "VG", "Pol": "EX", "Sym": "EX", "FL": "NON", "Disc%": null, "Price/ct": null, "Amt $": null, "Rap": 9200, "Rap Value": 18768, "Length": 7.93, "Width": 7.95, "Height": 5, "Depth%": 63, "Tab %": 61, "Link": null}, {"Range": 200, "Certificate": 260000095459, "Status": "M", "Shape": "ROUND", "Lab": "HRD", "Size": 2.08, "Color": "G", "Clarity": "SI2", "Cut": "VG", "Pol": "VG", "Sym": "EX", "FL": "NON", "Disc%": null, "Price/ct": null, "Amt $": null, "Rap": 9200, "Rap Value": 19136, "Length": 7.95, "Width": 8, "Height": 5.1, "Depth%": 63.9, "Tab %": 57, "Link": null}, {"Range": 200, "Certificate": 260000073415, "Status": "M", "Shape": "ROUND", "Lab": "HRD", "Size": 2.16, "Color": "F", "Clarity": "SI2", "Cut": "VG", "Pol": "VG", "Sym": "VG", "FL": "STG", "Disc%": null, "Price/ct": null, "Amt $": null, "Rap": 9800, "Rap Value": 21168, "Length": 7.98, "Width": 8.06, "Height": 5.14, "Depth%": 63.9, "Tab %": 58, "Link": null}, {"Range": 500, "Certificate": 240000035052, "Status": "M", "Shape": "ROUND", "Lab": "HRD", "Size": 5.03, "Color": "H", "Clarity": "VS2", "Cut": "EX", "Pol": "EX", "Sym": "EX", "FL": "NON", "Disc%": 60, "Price/ct": 13000, "Amt $": 65390, "Rap": 32500, "Rap Value": 163475, "Length": 10.85, "Width": 10.93, "Height": 6.82, "Depth%": 62.5, "Tab %": 58, "Link": null}, {"Range": 100, "Certificate": 250000325867, "Status": "M", "Shape": "OVAL", "Lab": "HRD", "Size": 1.01, "Color": "D", "Clarity": "SI2", "Cut": null, "Pol": "EX", "Sym": "VG", "FL": "MED", "Disc%": null, "Price/ct": null, "Amt $": null, "Rap": 3900, "Rap Value": 3939, "Length": 8.18, "Width": 5.61, "Height": 3.39, "Depth%": 60.4, "Tab %": 57, "Link": null}, {"Range": 100, "Certificate": 260000041130, "Status": "M", "Shape": "OVAL", "Lab": "HRD", "Size": 1.01, "Color": "D", "Clarity": "SI2", "Cut": null, "Pol": "EX", "Sym": "VG", "FL": "MED", "Disc%": null, "Price/ct": null, "Amt $": null, "Rap": 3900, "Rap Value": 3939, "Length": 7.75, "Width": 5.59, "Height": 3.51, "Depth%": 62.8, "Tab %": 58, "Link": null}, {"Range": 120, "Certificate": 260000082615, "Status": "M", "Shape": "OVAL", "Lab": "HRD", "Size": 1.21, "Color": "D", "Clarity": "SI2", "Cut": null, "Pol": "EX", "Sym": "VG", "FL": "NON", "Disc%": null, "Price/ct": null, "Amt $": null, "Rap": 3900, "Rap Value": 4719, "Length": 8.09, "Width": 5.9, "Height": 3.82, "Depth%": 64.7, "Tab %": 57, "Link": null}, {"Range": 150, "Certificate": 260000085585, "Status": "M", "Shape": "OVAL", "Lab": "HRD", "Size": 1.5, "Color": "D", "Clarity": "SI2", "Cut": null, "Pol": "EX", "Sym": "EX", "FL": "MED", "Disc%": null, "Price/ct": null, "Amt $": null, "Rap": 6700, "Rap Value": 10050, "Length": 8.72, "Width": 6.35, "Height": 4.11, "Depth%": 64.7, "Tab %": 59, "Link": null}, {"Range": 150, "Certificate": 260000063308, "Status": "M", "Shape": "OVAL", "Lab": "HRD", "Size": 1.5, "Color": "E", "Clarity": "SI2", "Cut": null, "Pol": "EX", "Sym": "VG", "FL": "MED", "Disc%": null, "Price/ct": null, "Amt $": null, "Rap": 6300, "Rap Value": 9450, "Length": 8.95, "Width": 6.43, "Height": 4.03, "Depth%": 62.7, "Tab %": 59, "Link": null}];
+
+const STORAGE_KEY = 'diamond_stock_override_v1';
+let DATA = ORIGINAL_DATA;
+
+const COLOR_ORDER = ['D','E','F','G','H','I','J','K'];
+const CLARITY_ORDER = ['FL','IF','VVS1','VVS2','VS1','VS2','SI1','SI2','SI3','I1','I2','I3'];
+const CUT_ORDER = ['EX','VG','GD','FR','PR'];
+
+const COLUMNS = [
+  {key:'_chk', label:'', type:'chk'},
+  {key:'Certificate', label:'Certificate', type:'cert'},
+  {key:'Status', label:'Status', type:'status'},
+  {key:'Shape', label:'Shape', type:'text'},
+  {key:'Lab', label:'Lab', type:'lab'},
+  {key:'Size', label:'Cts', type:'num', dec:2},
+  {key:'Color', label:'Color', type:'grade'},
+  {key:'Clarity', label:'Clarity', type:'grade'},
+  {key:'Cut', label:'Cut', type:'text'},
+  {key:'Pol', label:'Pol', type:'text'},
+  {key:'Sym', label:'Sym', type:'text'},
+  {key:'FL', label:'Fluor', type:'text'},
+  {key:'Disc%', label:'Disc %', type:'num', dec:1},
+  {key:'Amt $', label:'Amount', type:'amt', dec:2},
+  {key:'Link', label:'Media', type:'link'},
+];
+
+// _id is (re)assigned in rebuildFromData(), since DATA can be replaced via upload/reset
+
+let sortKey = 'Amt $';
+let sortDir = -1;
+const selected = new Set();
+
+function fmtUSD(v, dec){
+  if(v === null || v === undefined) return '—';
+  return '$' + v.toLocaleString('en-US', {minimumFractionDigits: dec===undefined?0:dec, maximumFractionDigits: dec===undefined?0:dec});
+}
+function fmtNum(v, dec){
+  if(v === null || v === undefined) return '—';
+  return v.toLocaleString('en-US', {minimumFractionDigits: dec||0, maximumFractionDigits: dec||0});
+}
+
+function uniqueSorted(arr, order){
+  const set = [...new Set(arr)];
+  if(order){
+    return set.sort((a,b)=> order.indexOf(a) - order.indexOf(b));
+  }
+  return set.sort();
+}
+
+// ---- multi-select dropdown widget ----
+// Each .msel container becomes a button + checkbox-list popover.
+// Selected values live in a Set; an empty Set means "All" (no filtering).
+const MSELS = {}; // id -> { el, selected:Set, options:[{value,label,count}], onChange }
+
+function createMultiSelect(id, onChange){
+  const el = document.getElementById(id);
+  el.classList.add('msel');
+  el.innerHTML = `
+    <button type="button" class="msel-btn">
+      <span class="msel-label">${el.dataset.placeholder || 'All'}</span>
+      <span class="msel-caret">▾</span>
+    </button>
+    <div class="msel-panel">
+      <div class="msel-panel-actions">
+        <button type="button" class="msel-all">SELECT ALL</button>
+        <button type="button" class="msel-none">CLEAR</button>
+      </div>
+      <div class="msel-options"></div>
+    </div>
+  `;
+  const state = { el, selected: new Set(), options: [], onChange: onChange || function(){} };
+  MSELS[id] = state;
+
+  const btn = el.querySelector('.msel-btn');
+  btn.addEventListener('click', (e)=>{
+    e.stopPropagation();
+    const wasOpen = el.classList.contains('open');
+    document.querySelectorAll('.msel.open').forEach(o=>{ if(o!==el) o.classList.remove('open'); });
+    el.classList.toggle('open', !wasOpen);
+  });
+  el.querySelector('.msel-all').addEventListener('click', (e)=>{
+    e.stopPropagation();
+    state.options.forEach(o=> state.selected.add(String(o.value)));
+    renderMultiSelect(id);
+    state.onChange();
+  });
+  el.querySelector('.msel-none').addEventListener('click', (e)=>{
+    e.stopPropagation();
+    state.selected.clear();
+    renderMultiSelect(id);
+    state.onChange();
+  });
+  el.addEventListener('click', (e)=> e.stopPropagation());
+
+  return state;
+}
+
+function setMultiSelectOptions(id, options){
+  // options: array of {value, label, count?}
+  const state = MSELS[id];
+  const validValues = new Set(options.map(o=>String(o.value)));
+  // drop any previously-selected values that no longer exist in this option set
+  [...state.selected].forEach(v=>{ if(!validValues.has(v)) state.selected.delete(v); });
+  state.options = options;
+  renderMultiSelect(id);
+}
+
+function renderMultiSelect(id){
+  const state = MSELS[id];
+  const el = state.el;
+  const optWrap = el.querySelector('.msel-options');
+
+  if(state.options.length === 0){
+    optWrap.innerHTML = '<div class="msel-empty">No options</div>';
+  } else {
+    optWrap.innerHTML = state.options.map(o=>{
+      const val = String(o.value);
+      const checked = state.selected.has(val) ? 'checked' : '';
+      const countHtml = (o.count !== undefined && o.count !== null) ? `<span class="msel-opt-count">${o.count}</span>` : '';
+      return `<label class="msel-option"><input type="checkbox" data-value="${val}" ${checked}><span class="msel-opt-label">${o.label}</span>${countHtml}</label>`;
+    }).join('');
+    optWrap.querySelectorAll('input[type="checkbox"]').forEach(cb=>{
+      cb.addEventListener('change', ()=>{
+        const v = cb.dataset.value;
+        if(cb.checked) state.selected.add(v); else state.selected.delete(v);
+        renderMultiSelectLabel(id);
+        state.onChange();
+      });
+    });
+  }
+  renderMultiSelectLabel(id);
+}
+
+function renderMultiSelectLabel(id){
+  const state = MSELS[id];
+  const el = state.el;
+  const labelEl = el.querySelector('.msel-label');
+  const btn = el.querySelector('.msel-btn');
+  const n = state.selected.size;
+
+  let existingBadge = btn.querySelector('.msel-count');
+  if(n === 0){
+    labelEl.textContent = el.dataset.placeholder || 'All';
+    labelEl.classList.remove('has-value');
+    if(existingBadge) existingBadge.remove();
+  } else if(n === 1){
+    const onlyVal = [...state.selected][0];
+    const opt = state.options.find(o=> String(o.value) === onlyVal);
+    labelEl.textContent = opt ? opt.label.replace(/\s*\(\d+\)\s*$/, '') : onlyVal;
+    labelEl.classList.add('has-value');
+    if(existingBadge) existingBadge.remove();
+  } else {
+    labelEl.textContent = `${n} selected`;
+    labelEl.classList.add('has-value');
+  }
+}
+
+function getMultiSelectValues(id){
+  return MSELS[id] ? new Set(MSELS[id].selected) : new Set();
+}
+
+function clearMultiSelect(id){
+  const state = MSELS[id];
+  if(!state) return;
+  state.selected.clear();
+  renderMultiSelect(id);
+}
+
+// close any open dropdown when clicking elsewhere
+document.addEventListener('click', ()=>{
+  document.querySelectorAll('.msel.open').forEach(o=> o.classList.remove('open'));
+});
+
+function statusBadge(v){
+  const code = (v || '').toString().trim().toUpperCase();
+  const map = {
+    'A': {label:'A', cls:'status-a', title:'Available'},
+    'B': {label:'B', cls:'status-b', title:'Business Process'},
+    'M': {label:'M', cls:'status-m', title:'Memo'},
+  };
+  const m = map[code];
+  if(!m) return code ? `<span class="status-badge">${code}</span>` : '<span class="media-dash">—</span>';
+  return `<span class="status-badge ${m.cls}" title="${m.title}">${m.label}</span>`;
+}
+
+function certLink(cert, lab){
+  const c = String(cert);
+  if(lab === 'GIA'){
+    return `https://www.gia.edu/report-check?reportno=${c}`;
+  }
+  if(lab === 'HRD'){
+    return `https://my.hrdantwerp.com/en/verify-a-certificate?number=${c}`;
+  }
+  return null;
+}
+
+function mediaIcon(){
+  return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><polygon points="5,3 19,12 5,21" fill="currentColor" stroke="none"/></svg>`;
+}
+
+// ---- carat buckets ----
+function bucketOf(size){
+  const lo = Math.floor(size*10)/10;
+  return lo;
+}
+function bucketLabel(lo){
+  return `${lo.toFixed(2)}–${(lo+0.09).toFixed(2)} ct`;
+}
+function bucketLabelPlain(lo){
+  return `${lo.toFixed(2)}-${(lo+0.09).toFixed(2)}`;
+}
+function populateCaratRange(){
+  const buckets = [...new Set(DATA.map(d=>bucketOf(d.Size)))].sort((a,b)=>a-b);
+  const options = buckets.map(b=>{
+    const count = DATA.filter(d=>bucketOf(d.Size)===b).length;
+    return { value: b, label: `${bucketLabel(b)} (${count})`, count: undefined };
+  });
+  setMultiSelectOptions('f-caratrange', options);
+}
+function refreshExactSizeOptions(){
+  const activeBuckets = getMultiSelectValues('f-caratrange');
+  let pool = DATA;
+  if(activeBuckets.size > 0){
+    pool = DATA.filter(d => activeBuckets.has(String(bucketOf(d.Size))));
+  }
+  const sizes = uniqueSorted(pool.map(d=>d.Size.toFixed(2)));
+  setMultiSelectOptions('f-exactsize', sizes.map(s=>({ value:s, label: s + ' ct' })));
+}
+
+function rebuildFromData(){
+  DATA.forEach((d,i)=> d._id = i);
+  document.getElementById('stoneCountMeta').textContent = DATA.length;
+
+  const shapes = uniqueSorted(DATA.map(d=>d.Shape));
+  const labs = uniqueSorted(DATA.map(d=>d.Lab));
+  const shapeLabel = shapes.map(s => s.charAt(0) + s.slice(1).toLowerCase() + 's').join(', ');
+  document.getElementById('footerSummary').textContent = `${DATA.length} stones · ${shapeLabel} · ${labs.join(' & ')} certified`;
+
+  setMultiSelectOptions('f-shape', shapes.map(v=>({value:v, label:v})));
+  setMultiSelectOptions('f-lab', labs.map(v=>({value:v, label:v})));
+  setMultiSelectOptions('f-color', uniqueSorted(DATA.map(d=>d.Color), COLOR_ORDER).map(v=>({value:v, label:v})));
+  setMultiSelectOptions('f-clarity', uniqueSorted(DATA.map(d=>d.Clarity), CLARITY_ORDER).map(v=>({value:v, label:v})));
+  setMultiSelectOptions('f-cut', uniqueSorted(DATA.map(d=>d.Cut).filter(Boolean), CUT_ORDER).map(v=>({value:v, label:v})));
+  populateCaratRange();
+  refreshExactSizeOptions();
+
+  selected.clear();
+  Object.keys(MSELS).forEach(id=> clearMultiSelect(id));
+  document.querySelectorAll('.field input').forEach(i=>i.value='');
+
+  render();
+}
+
+function init(){
+  document.getElementById('genTime').textContent = 'Rendered client-side · no data leaves this page';
+
+  loadStoredDataIfAny();
+
+  // create the multi-select dropdowns; each calls render() on any change
+  ['f-status','f-shape','f-lab','f-color','f-clarity','f-cut'].forEach(id=>{
+    createMultiSelect(id, render);
+  });
+  createMultiSelect('f-caratrange', ()=>{ refreshExactSizeOptions(); render(); });
+  createMultiSelect('f-exactsize', render);
+
+  setMultiSelectOptions('f-status', [
+    { value:'A', label:'Available' },
+    { value:'B', label:'Business Process' },
+    { value:'M', label:'Memo' },
+  ]);
+
+  buildHead();
+  rebuildFromData();
+
+  document.getElementById('f-search').addEventListener('input', render);
+
+  document.getElementById('resetBtn').addEventListener('click', ()=>{
+    Object.keys(MSELS).forEach(id=> clearMultiSelect(id));
+    document.querySelectorAll('.field input').forEach(i=>i.value='');
+    refreshExactSizeOptions();
+    render();
+  });
+  document.getElementById('clearSelBtn').addEventListener('click', ()=>{
+    selected.clear();
+    render();
+  });
+  document.getElementById('downloadBtn').addEventListener('click', downloadSelection);
+
+  document.getElementById('uploadBtn').addEventListener('click', openPasswordGate);
+  document.getElementById('pwCancelBtn').addEventListener('click', closePasswordGate);
+  document.getElementById('pwSubmitBtn').addEventListener('click', submitPasswordGate);
+  document.getElementById('pwInput').addEventListener('keydown', (e)=>{ if(e.key === 'Enter') submitPasswordGate(); });
+  document.getElementById('fileInput').addEventListener('change', handleFileUpload);
+  document.getElementById('resetDataBtn').addEventListener('click', resetToOriginalData);
+  document.getElementById('previewCancelBtn').addEventListener('click', cancelPreview);
+  document.getElementById('previewConfirmBtn').addEventListener('click', confirmPreview);
+}
+
+function buildHead(){
+  const tr = document.getElementById('headRow');
+  COLUMNS.forEach(col=>{
+    const th = document.createElement('th');
+    if(col.type==='num' || col.type==='amt') th.classList.add('num');
+    if(col.type==='chk'){
+      th.classList.add('chk');
+      const cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.id = 'selectAllChk';
+      cb.title = 'Select all shown';
+      cb.addEventListener('change', ()=>{
+        const filtered = getFiltered();
+        if(cb.checked){ filtered.forEach(d=>selected.add(d._id)); }
+        else { filtered.forEach(d=>selected.delete(d._id)); }
+        render();
+      });
+      th.appendChild(cb);
+      tr.appendChild(th);
+      return;
+    }
+    th.dataset.key = col.key;
+    th.innerHTML = col.label + '<span class="arrow"></span>';
+    th.addEventListener('click', ()=>{
+      if(sortKey === col.key){ sortDir *= -1; } else { sortKey = col.key; sortDir = 1; }
+      render();
+    });
+    tr.appendChild(th);
+  });
+}
+
+function getFiltered(){
+  const status = getMultiSelectValues('f-status');
+  const shape = getMultiSelectValues('f-shape');
+  const lab = getMultiSelectValues('f-lab');
+  const color = getMultiSelectValues('f-color');
+  const clarity = getMultiSelectValues('f-clarity');
+  const cut = getMultiSelectValues('f-cut');
+  const caratrange = getMultiSelectValues('f-caratrange');
+  const exactsize = getMultiSelectValues('f-exactsize');
+  const search = document.getElementById('f-search').value.trim();
+
+  return DATA.filter(d=>{
+    if(status.size && !status.has((d.Status||'').toString().trim().toUpperCase())) return false;
+    if(shape.size && !shape.has(d.Shape)) return false;
+    if(lab.size && !lab.has(d.Lab)) return false;
+    if(color.size && !color.has(d.Color)) return false;
+    if(clarity.size && !clarity.has(d.Clarity)) return false;
+    if(cut.size && !cut.has(d.Cut)) return false;
+    if(caratrange.size && !caratrange.has(String(bucketOf(d.Size)))) return false;
+    if(exactsize.size && !exactsize.has(d.Size.toFixed(2))) return false;
+    if(search && !String(d.Certificate).includes(search)) return false;
+    return true;
+  });
+}
+
+function colLetter(n){
+  // 1-indexed column number -> Excel letter
+  let s = '';
+  while(n > 0){
+    const rem = (n - 1) % 26;
+    s = String.fromCharCode(65 + rem) + s;
+    n = Math.floor((n - 1) / 26);
+  }
+  return s;
+}
+
+// ---- upload / persistence ----
+const UPLOAD_PASSWORD = 'Visa0469';
+const REQUIRED_HEADERS = ['Certificate','Status','Shape','Lab','Size'];
+const PREVIEW_COLS = ['Certificate','Status','Shape','Lab','Size','Color','Clarity','Disc%','Amt $'];
+let pendingUpload = null; // { parsed, filename }
+
+function setUploadStatus(msg, cls){
+  const el = document.getElementById('uploadStatus');
+  el.textContent = msg;
+  el.className = 'upload-status' + (cls ? ' ' + cls : '');
+}
+
+function openPasswordGate(){
+  document.getElementById('pwInput').value = '';
+  document.getElementById('pwError').textContent = '';
+  document.getElementById('pwOverlay').classList.remove('hidden');
+  document.getElementById('pwInput').focus();
+}
+function closePasswordGate(){
+  document.getElementById('pwOverlay').classList.add('hidden');
+}
+function submitPasswordGate(){
+  const val = document.getElementById('pwInput').value;
+  if(val === UPLOAD_PASSWORD){
+    closePasswordGate();
+    document.getElementById('fileInput').click();
+  }else{
+    document.getElementById('pwError').textContent = 'Incorrect password.';
+    document.getElementById('pwInput').value = '';
+    document.getElementById('pwInput').focus();
+  }
+}
+
+function handleFileUpload(ev){
+  const file = ev.target.files && ev.target.files[0];
+  if(!file) return;
+  setUploadStatus('Reading ' + file.name + '…', 'busy');
+
+  const reader = new FileReader();
+  reader.onerror = () => setUploadStatus('Could not read that file. Try again.', 'err');
+  reader.onload = (e) => {
+    try{
+      const wb = XLSX.read(e.target.result, {type:'array'});
+      const sheetName = wb.SheetNames[0];
+      const ws = wb.Sheets[sheetName];
+      const rows = XLSX.utils.sheet_to_json(ws, {header:1, raw:true, defval:null});
+
+      if(!rows || rows.length < 2){
+        setUploadStatus('That file looks empty.', 'err');
+        return;
+      }
+
+      const header = rows[0].map(h => (h===null||h===undefined) ? '' : String(h).trim());
+      const missing = REQUIRED_HEADERS.filter(h => !header.includes(h));
+      if(missing.length){
+        setUploadStatus(`Missing column(s): ${missing.join(', ')}. Expected the same layout as Stk_2106.xlsx.`, 'err');
+        return;
+      }
+
+      const idxOf = {};
+      header.forEach((h,i)=>{ if(h) idxOf[h] = i; });
+
+      const parsed = [];
+      for(let r=1; r<rows.length; r++){
+        const row = rows[r];
+        if(!row || row.every(c => c===null || c===undefined || c==='')) continue;
+        const rec = {};
+        header.forEach(h=>{
+          if(!h || h === 'Image Link') return;
+          let v = row[idxOf[h]];
+          if(v === undefined) v = null;
+          if(typeof v === 'number') v = Math.round(v*100)/100;
+          if(typeof v === 'string'){
+            const t = v.trim();
+            v = t === '' ? null : t;
+          }
+          rec[h] = v;
+        });
+        if(rec.Certificate === null || rec.Certificate === undefined) continue;
+        rec.Link = null; // uploaded files won't carry live hyperlinks through this path
+        parsed.push(rec);
+      }
+
+      if(parsed.length === 0){
+        setUploadStatus('No usable rows found in that file.', 'err');
+        return;
+      }
+
+      pendingUpload = { parsed, filename: file.name };
+      openPreview(pendingUpload);
+    }catch(err){
+      setUploadStatus('Could not read that file. Make sure it\'s a valid .xlsx.', 'err');
+    }finally{
+      ev.target.value = '';
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function buildPreviewWarnings(parsed){
+  const warnings = [];
+  const currentCount = DATA.length;
+  const newCount = parsed.length;
+  const pctChange = currentCount ? Math.abs(newCount - currentCount) / currentCount : 0;
+
+  if(currentCount && pctChange >= 0.5){
+    warnings.push({
+      severe: true,
+      text: `Stone count changes from ${currentCount} to ${newCount} — that's a ${Math.round(pctChange*100)}% difference. Double-check this is the right file.`
+    });
+  }
+
+  const validStatuses = ['A','B','M'];
+  const badStatusCount = parsed.filter(d => d.Status && !validStatuses.includes(String(d.Status).trim().toUpperCase())).length;
+  if(badStatusCount > 0){
+    warnings.push({ severe:false, text: `${badStatusCount} row(s) have a Status value other than A, B, or M.` });
+  }
+
+  const noCertCount = parsed.filter(d => !d.Certificate).length;
+  if(noCertCount > 0){
+    warnings.push({ severe:false, text: `${noCertCount} row(s) were skipped for missing a Certificate number.` });
+  }
+
+  const dupCerts = {};
+  parsed.forEach(d=>{ const c = String(d.Certificate); dupCerts[c] = (dupCerts[c]||0)+1; });
+  const dupCount = Object.values(dupCerts).filter(c=>c>1).length;
+  if(dupCount > 0){
+    warnings.push({ severe:false, text: `${dupCount} certificate number(s) appear more than once in this file.` });
+  }
+
+  return warnings;
+}
+
+function openPreview({parsed, filename}){
+  const totalValue = parsed.reduce((s,d)=> s + (d['Amt $']||0), 0);
+  const totalCarats = parsed.reduce((s,d)=> s + (d.Size||0), 0);
+
+  document.getElementById('previewSummary').innerHTML = `
+    File: <b>${filename}</b><br>
+    <b>${parsed.length}</b> stones · <b>${totalCarats.toFixed(2)} ct</b> total weight · <b>$${Math.round(totalValue).toLocaleString()}</b> total value<br>
+    Current dashboard has <b>${DATA.length}</b> stones — this will replace all of it if you continue.
+  `;
+
+  const warnings = buildPreviewWarnings(parsed);
+  const warnBox = document.getElementById('previewWarnings');
+  warnBox.innerHTML = warnings.map(w =>
+    `<div class="preview-warning-item${w.severe?' severe':''}">${w.severe?'⚠ ':''}${w.text}</div>`
+  ).join('');
+
+  const headRow = document.getElementById('previewHeadRow');
+  headRow.innerHTML = PREVIEW_COLS.map(c=>`<th>${c}</th>`).join('');
+
+  const body = document.getElementById('previewBodyRows');
+  const sample = parsed.slice(0, 15);
+  body.innerHTML = sample.map(d=>
+    '<tr>' + PREVIEW_COLS.map(c=>{
+      const v = d[c];
+      return `<td>${v===null||v===undefined?'—':v}</td>`;
+    }).join('') + '</tr>'
+  ).join('') + (parsed.length > 15 ? `<tr class="preview-more-row"><td colspan="${PREVIEW_COLS.length}">…and ${parsed.length-15} more rows</td></tr>` : '');
+
+  document.getElementById('previewOverlay').classList.remove('hidden');
+}
+
+function cancelPreview(){
+  pendingUpload = null;
+  document.getElementById('previewOverlay').classList.add('hidden');
+  setUploadStatus('Upload cancelled. Dashboard unchanged.', '');
+}
+
+function confirmPreview(){
+  if(!pendingUpload) return;
+  const { parsed, filename } = pendingUpload;
+
+  DATA = parsed;
+  try{
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({
+      filename,
+      uploadedAt: new Date().toISOString(),
+      data: parsed
+    }));
+  }catch(storageErr){
+    // storage full or unavailable; still apply data for this session
+  }
+
+  document.getElementById('sourceFileName').textContent = filename;
+  document.getElementById('resetDataBtn').classList.remove('hidden');
+  setUploadStatus(`Updated · ${parsed.length} stones loaded from ${filename}`, 'ok');
+  document.getElementById('previewOverlay').classList.add('hidden');
+  pendingUpload = null;
+  rebuildFromData();
+}
+
+function loadStoredDataIfAny(){
+  let raw;
+  try{ raw = localStorage.getItem(STORAGE_KEY); }catch(e){ raw = null; }
+  if(!raw) return;
+  try{
+    const stored = JSON.parse(raw);
+    if(stored && Array.isArray(stored.data) && stored.data.length){
+      DATA = stored.data;
+      document.getElementById('sourceFileName').textContent = stored.filename || 'Updated file';
+      document.getElementById('resetDataBtn').classList.remove('hidden');
+      const when = stored.uploadedAt ? new Date(stored.uploadedAt) : null;
+      setUploadStatus(when ? `Showing your upload from ${when.toLocaleDateString()} ${when.toLocaleTimeString()}` : 'Showing your last uploaded data', 'ok');
+    }
+  }catch(e){
+    // corrupted storage; ignore and fall back to original
+  }
+}
+
+function resetToOriginalData(){
+  DATA = ORIGINAL_DATA;
+  try{ localStorage.removeItem(STORAGE_KEY); }catch(e){}
+  document.getElementById('sourceFileName').textContent = 'Stk_2106.xlsx';
+  document.getElementById('resetDataBtn').classList.add('hidden');
+  setUploadStatus('Reset to the original file.', 'ok');
+  rebuildFromData();
+}
+
+function downloadSelection(){
+  const rows = DATA.filter(d=>selected.has(d._id));
+  if(rows.length === 0) return;
+
+  // exact column order from the user's template
+  const headers = ['Size Range','Certificate','Status','Shape','Lab','Size','Color','Clarity','Cut','Pol','Sym','FL','Disc%','Price/ct','Amt $','Rap','Rap Value','Length','Width','Height','Depth%','Tab %','Image Link'];
+  const idx = {};
+  headers.forEach((h,i)=> idx[h] = i+1);
+
+  const dataKeyMap = { // header label -> DATA field
+    'Certificate':'Certificate','Status':'Status','Shape':'Shape','Lab':'Lab','Size':'Size','Color':'Color',
+    'Clarity':'Clarity','Cut':'Cut','Pol':'Pol','Sym':'Sym','FL':'FL','Disc%':'Disc%',
+    'Price/ct':'Price/ct','Amt $':'Amt $','Rap':'Rap','Rap Value':'Rap Value',
+    'Length':'Length','Width':'Width','Height':'Height','Depth%':'Depth%','Tab %':'Tab %'
+  };
+
+  // header row goes at sheet row 2; data starts at row 3 (row 1 reserved for the floating summary)
+  const headerSheetRow = 2;
+  const firstDataRow = 3;
+  const lastDataRow = firstDataRow + rows.length - 1;
+
+  const aoa = [];
+  aoa.push(new Array(headers.length).fill('')); // row 1: summary (filled in below)
+  aoa.push(headers); // row 2: header
+
+  rows.forEach(d=>{
+    const row = headers.map(h=>{
+      if(h === 'Size Range') return bucketLabelPlain(bucketOf(d.Size));
+      if(h === 'Image Link') return d.Link ? 'link' : '';
+      const key = dataKeyMap[h];
+      const v = d[key];
+      return v === null || v === undefined ? '' : v;
+    });
+    aoa.push(row);
+  });
+
+  const ws = XLSX.utils.aoa_to_sheet(aoa);
+
+  function colRange(label){
+    const L = colLetter(idx[label]);
+    return `${L}${firstDataRow}:${L}${lastDataRow}`;
+  }
+  function setFormula(label, formula){
+    const addr = `${colLetter(idx[label])}1`;
+    ws[addr] = {t:'n', f: formula};
+  }
+
+  setFormula('Shape', `SUBTOTAL(3,${colRange('Shape')})`);
+  setFormula('Size', `SUBTOTAL(9,${colRange('Size')})`);
+  setFormula('Amt $', `SUBTOTAL(9,${colRange('Amt $')})`);
+  setFormula('Rap Value', `SUBTOTAL(9,${colRange('Rap Value')})`);
+  setFormula('Disc%', `0-(${colLetter(idx['Amt $'])}1/${colLetter(idx['Rap Value'])}1-1)*100`);
+  setFormula('Price/ct', `${colLetter(idx['Amt $'])}1/${colLetter(idx['Size'])}1`);
+
+  // column widths, matched proportionally to the template
+  const widthMap = {
+    'Size Range':10.4,'Certificate':13.1,'Status':6,'Shape':7.6,'Lab':4.7,'Size':4.6,'Color':5.7,
+    'Clarity':6.7,'Cut':4,'Pol':3.9,'Sym':4.7,'FL':5.3,'Disc%':6.1,'Price/ct':7.9,
+    'Amt $':7.6,'Rap':5,'Rap Value':9.9,'Length':7,'Width':6.4,'Height':6.9,
+    'Depth%':8,'Tab %':6.1,'Image Link':10.4
+  };
+  ws['!cols'] = headers.map(h=>({wch: widthMap[h] || 9}));
+
+  // number formats on data cells
+  const numFmt = {
+    'Size':'0.00','Disc%':'0','Price/ct':'0','Amt $':'0','Rap':'0','Rap Value':'0',
+    'Length':'0.00','Width':'0.00','Height':'0.00','Depth%':'0.0','Tab %':'0'
+  };
+  for(let r = firstDataRow; r <= lastDataRow; r++){
+    headers.forEach(h=>{
+      if(numFmt[h]){
+        const addr = `${colLetter(idx[h])}${r}`;
+        if(ws[addr]) ws[addr].z = numFmt[h];
+      }
+    });
+  }
+
+  // default font (Calibri 11) on every data cell that doesn't already have a custom style
+  for(let r = firstDataRow; r <= lastDataRow; r++){
+    headers.forEach((h,i)=>{
+      const addr = `${colLetter(i+1)}${r}`;
+      const c = ws[addr];
+      if(c && !c.s){
+        c.s = {font:{name:'Calibri', sz:11}};
+      }
+    });
+  }
+
+  // summary row (row 1): bold red text, centered, no fill
+  const summaryFmt = {'Size':'0.00','Disc%':'0','Price/ct':'0','Amt $':'0','Rap Value':'0'};
+  ['Shape','Size','Disc%','Price/ct','Amt $','Rap Value'].forEach(h=>{
+    const addr = `${colLetter(idx[h])}1`;
+    if(ws[addr]){
+      ws[addr].s = {font:{name:'Calibri', sz:11, bold:true, color:{rgb:'FFFF0000'}}, alignment:{horizontal:'center', vertical:'center'}};
+      if(summaryFmt[h]) ws[addr].z = summaryFmt[h];
+    }
+  });
+
+  // header row (row 2): gray fill, white bold text, centered
+  headers.forEach((h,i)=>{
+    const addr = `${colLetter(i+1)}${headerSheetRow}`;
+    if(ws[addr]) ws[addr].s = {
+      font:{name:'Calibri', sz:11, bold:true, color:{rgb:'FFFFFFFF'}},
+      fill:{patternType:'solid', fgColor:{rgb:'FF808080'}},
+      alignment:{horizontal:'center', vertical:'center'}
+    };
+  });
+
+  // "link" cells in Image Link column: blue text, like the template
+  for(let r = firstDataRow; r <= lastDataRow; r++){
+    const addr = `${colLetter(idx['Image Link'])}${r}`;
+    if(ws[addr] && ws[addr].v === 'link'){
+      ws[addr].s = {font:{name:'Calibri', sz:11, color:{rgb:'FF0000FF'}}};
+    }
+  }
+
+  ws['!ref'] = XLSX.utils.encode_range({s:{r:0,c:0}, e:{r:lastDataRow-1, c:headers.length-1}});
+
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Sheet1');
+
+  const now = new Date();
+  const pad = n => String(n).padStart(2,'0');
+  const datePart = `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())}`;
+  const timePart = `${pad(now.getHours())}-${pad(now.getMinutes())}-${pad(now.getSeconds())}`;
+  XLSX.writeFile(wb, `Selection_${datePart}_${timePart}.xlsx`);
+}
+
+function render(){
+  const filtered = getFiltered();
+
+  filtered.sort((a,b)=>{
+    let av = a[sortKey], bv = b[sortKey];
+    if(av === null || av === undefined) av = -Infinity;
+    if(bv === null || bv === undefined) bv = -Infinity;
+    if(typeof av === 'string') return av.localeCompare(bv) * sortDir;
+    return (av - bv) * sortDir;
+  });
+
+  document.querySelectorAll('#headRow th').forEach(th=>{
+    const arrow = th.querySelector('.arrow');
+    if(arrow) arrow.textContent = th.dataset.key === sortKey ? (sortDir===1 ? '▲' : '▼') : '';
+  });
+
+  const totalValue = filtered.reduce((s,d)=> s + (d['Amt $']||0), 0);
+  document.getElementById('resultCount').textContent = filtered.length;
+  document.getElementById('resultValue').textContent = fmtUSD(totalValue, 0);
+
+  const tbody = document.getElementById('bodyRows');
+  tbody.innerHTML = '';
+
+  if(filtered.length === 0){
+    tbody.innerHTML = `<tr class="empty-row"><td colspan="${COLUMNS.length}">No stones match these filters. Try widening the carat range or clearing a grade filter.</td></tr>`;
+  } else {
+    filtered.forEach(d=>{
+      const tr = document.createElement('tr');
+      if(selected.has(d._id)) tr.classList.add('row-selected');
+      tr.innerHTML = COLUMNS.map(col=>{
+        const v = d[col.key];
+        if(col.type==='chk'){
+          return `<td class="chk"><input type="checkbox" data-id="${d._id}" ${selected.has(d._id)?'checked':''}></td>`;
+        }
+        if(col.type==='cert'){
+          const href = certLink(v, d.Lab);
+          if(href) return `<td class="cert"><a class="cert-link" href="${href}" target="_blank" rel="noopener">${v}</a></td>`;
+          return `<td class="cert">${v}</td>`;
+        }
+        if(col.type==='lab') return `<td><span class="lab-tag ${v==='GIA'?'gia':''}">${v}</span></td>`;
+        if(col.type==='status') return `<td>${statusBadge(v)}</td>`;
+        if(col.type==='grade'){
+          if(col.key==='Color') return `<td>${v}</td>`;
+          return `<td>${v}</td>`;
+        }
+        if(col.type==='num') return `<td class="num">${fmtNum(v, col.dec)}</td>`;
+        if(col.type==='amt') return `<td class="num amt">${fmtUSD(v, 0)}</td>`;
+        if(col.type==='link'){
+          if(v) return `<td><a class="media-link" href="${v}" target="_blank" rel="noopener noreferrer" title="${v}">${mediaIcon()}</a></td>`;
+          return `<td><span class="media-dash">—</span></td>`;
+        }
+        return `<td>${v===null||v===undefined?'—':v}</td>`;
+      }).join('');
+      tbody.appendChild(tr);
+    });
+  }
+
+  tbody.querySelectorAll('input[type="checkbox"][data-id]').forEach(cb=>{
+    cb.addEventListener('change', ()=>{
+      const id = parseInt(cb.dataset.id);
+      if(cb.checked) selected.add(id); else selected.delete(id);
+      render();
+    });
+  });
+
+  const selectAllChk = document.getElementById('selectAllChk');
+  if(selectAllChk){
+    const allSelected = filtered.length > 0 && filtered.every(d=>selected.has(d._id));
+    selectAllChk.checked = allSelected;
+  }
+
+  renderSelectionBar();
+}
+
+function renderSelectionBar(){
+  const bar = document.getElementById('selectionBar');
+  const rows = DATA.filter(d=>selected.has(d._id));
+  if(rows.length === 0){
+    bar.classList.add('hidden');
+    return;
+  }
+  bar.classList.remove('hidden');
+  const totalValue = rows.reduce((s,d)=> s + (d['Amt $']||0), 0);
+  const totalCarats = rows.reduce((s,d)=> s + d.Size, 0);
+  document.getElementById('selCount').textContent = rows.length;
+  document.getElementById('selValue').textContent = fmtUSD(totalValue, 0);
+  document.getElementById('selCarats').textContent = totalCarats.toFixed(2);
+}
+
+init();
+</script>
+</body>
+</html>
